@@ -155,6 +155,8 @@ namespace MissionPlanner.GCSViews
         private Control MapContentPanel => map3DSplitContainer?.Panel1 ?? (Control)MapPanel;
         private Panel map3DHost;
         private Map3D map3DControl;
+        private ObstacleDistanceGraph _obstacleGraph;
+        private TabPage tabObstacle;
         internal static GMapOverlay geofence;
         internal static GMapOverlay photosoverlay;
         internal static GMapOverlay poioverlay = new GMapOverlay("POI");
@@ -434,7 +436,7 @@ namespace MissionPlanner.GCSViews
             MapPanel.Controls.Clear();
             splitContainer1.Panel2.Controls.Clear();
 
-            // Move tuning container to the bottom panel
+            // Move tuning container to the bottom panel.
             splitContainer1.Panel1.Controls.Clear();
             splitContainer1.Panel2.Controls.Add(splitContainer2);
 
@@ -563,6 +565,7 @@ namespace MissionPlanner.GCSViews
 
             SetupMissionChecklistSummary();
             SetupFlightStageTab();
+            SetupObstacleTab();
 
             log.Info("Components Done");
 
@@ -1045,6 +1048,29 @@ namespace MissionPlanner.GCSViews
 
                 tabControlactions.TabPages.Insert(insertAt, tabFlightStage);
             }
+        }
+
+        void SetupObstacleTab()
+        {
+            _obstacleGraph = new ObstacleDistanceGraph { Dock = DockStyle.Fill };
+            tabObstacle = new TabPage
+            {
+                Name = "tabObstacleDistance",
+                Text = "Obstacle",
+                UseVisualStyleBackColor = true,
+                BackColor = Color.FromArgb(32, 32, 32)
+            };
+            tabObstacle.Controls.Add(_obstacleGraph);
+
+            if (tabControlactions == null)
+                return;
+
+            var insertAt = tabControlactions.TabPages.IndexOf(tabPagePreFlight);
+            if (insertAt < 0)
+                insertAt = tabControlactions.TabPages.Count;
+            else
+                insertAt += 1;
+            tabControlactions.TabPages.Insert(insertAt, tabObstacle);
         }
 
         void AffirmAllGreenForArm()
@@ -1536,6 +1562,8 @@ namespace MissionPlanner.GCSViews
             if (CB_tuning.Checked)
                 ZedGraphTimer.Start();
 
+            _obstacleGraph?.Start();
+
             hud1.altunit = CurrentState.AltUnit;
             hud1.speedunit = CurrentState.SpeedUnit;
             hud1.distunit = CurrentState.DistanceUnit;
@@ -1821,7 +1849,11 @@ namespace MissionPlanner.GCSViews
         {
             //Check if we want to display calculated battery cell voltage
             hud1.displayCellVoltage = Settings.Instance.GetBoolean("HUD_showbatterycell", false);
-            hud1.batterycellcount = Settings.Instance.GetInt32("HUD_batterycellcount", 0);
+            var cells = Settings.Instance.GetInt32("HUD_batterycellcount", 12);
+            // Stock planner defaults are 0 or 4S. This aircraft is 12S (50.4 V full).
+            if (cells <= 0 || cells == 4)
+                cells = 12;
+            hud1.batterycellcount = cells;
         }
 
         public void CreateChart(ZedGraphControl zgc)
@@ -1887,6 +1919,7 @@ namespace MissionPlanner.GCSViews
             Settings.Instance["maplast_zoom"] = gMapControl1.Zoom.ToString();
 
             ZedGraphTimer.Stop();
+            _obstacleGraph?.Stop();
         }
 
         public void LoadLogFile(string file)
@@ -1954,6 +1987,8 @@ namespace MissionPlanner.GCSViews
 
             TabListDisplay.Add(tabFlightStage.Name, true);
 
+            TabListDisplay.Add(tabObstacle.Name, true);
+
             TabListDisplay.Add(tabTuning.Name, MainV2.DisplayConfiguration.displayTuningTab);
 
             TabListDisplay.Add(tabInspector.Name, MainV2.DisplayConfiguration.displayInspectorTab);
@@ -2007,6 +2042,46 @@ namespace MissionPlanner.GCSViews
 
             // Always surface Flight Stage (stage select + debug arm affirm) even if missing from saved layout.
             EnsureFlightStageTabVisible();
+            EnsureObstacleTabNextToPreFlight();
+        }
+
+        void EnsureObstacleTabNextToPreFlight()
+        {
+            if (tabObstacle == null || _themedTabStrip == null)
+                return;
+
+            var present = false;
+            foreach (TabPage existing in _themedTabStrip.TabPages)
+            {
+                if (existing == tabObstacle)
+                {
+                    present = true;
+                    break;
+                }
+            }
+
+            if (!present)
+                _themedTabStrip.AddTab(tabObstacle);
+
+            var preflightIndex = -1;
+            var obstacleIndex = -1;
+            var pages = _themedTabStrip.TabPages;
+            for (var i = 0; i < pages.Count; i++)
+            {
+                if (pages[i] == tabPagePreFlight)
+                    preflightIndex = i;
+                if (pages[i] == tabObstacle)
+                    obstacleIndex = i;
+            }
+
+            if (obstacleIndex < 0)
+                return;
+
+            var target = preflightIndex >= 0 ? preflightIndex + 1 : obstacleIndex;
+            if (obstacleIndex < target)
+                target--;
+            if (target != obstacleIndex)
+                _themedTabStrip.MoveTab(tabObstacle, target);
         }
 
         void EnsureFlightStageTabVisible()
@@ -2357,8 +2432,9 @@ namespace MissionPlanner.GCSViews
                 MainV2.comPort.UnSubscribeToPacketType(sub);
                 if (ans == false)
                 {
+                    var detail = PreflightArmGuard.ArmFailureDetail(sb.ToString());
                     if (CustomMessageBox.Show(
-                            action + " failed.\n" + sb.ToString() + "\nForce " + action +
+                            action + " failed.\n" + detail + "\nForce " + action +
                             " can bypass safety checks,\nwhich can lead to the vehicle crashing\nand causing serious injuries.\n\nDo you wish to Force " +
                             action + "?", Strings.ERROR, CustomMessageBox.MessageBoxButtons.YesNo,
                             CustomMessageBox.MessageBoxIcon.Exclamation, "Force " + action, "Cancel") ==
@@ -3345,6 +3421,7 @@ namespace MissionPlanner.GCSViews
             bool tuningChecked = CB_tuning.Checked;
             bool paramsChecked = CB_params.Checked;
             bool map3DChecked = CB_3dmap != null && CB_3dmap.Checked;
+            bool bottomTools = tuningChecked || paramsChecked || map3DChecked;
 
             splitContainer1.Panel1Collapsed = false;
 
@@ -3389,8 +3466,11 @@ namespace MissionPlanner.GCSViews
             else if (tuningChecked || paramsChecked)
             {
                 splitContainer1.Panel2Collapsed = false;
-                splitContainer2.Panel1Collapsed = !tuningChecked;
-                splitContainer2.Panel2Collapsed = !paramsChecked;
+                if (bottomTools)
+                {
+                    splitContainer2.Panel1Collapsed = !tuningChecked;
+                    splitContainer2.Panel2Collapsed = !paramsChecked;
+                }
 
                 if (tuningChecked && paramsChecked)
                 {
@@ -3408,13 +3488,19 @@ namespace MissionPlanner.GCSViews
                     zg1.Visible = true;
                     zg1.Refresh();
                 }
-                else
+                else if (paramsChecked)
                 {
                     ZedGraphTimer.Enabled = false;
                     ZedGraphTimer.Stop();
                     zg1.Visible = false;
                     configRawParams2.InitialTreeCollapsed = true;
                     configRawParams2.Activate();
+                }
+                else
+                {
+                    ZedGraphTimer.Enabled = false;
+                    ZedGraphTimer.Stop();
+                    zg1.Visible = false;
                 }
             }
             else
@@ -8079,7 +8165,7 @@ namespace MissionPlanner.GCSViews
                 return;
             }
 
-            string CellCount = "4";
+            string CellCount = hud1.batterycellcount > 0 ? hud1.batterycellcount.ToString() : "12";
             int iCellCount;
 
             if (DialogResult.Cancel == InputBox.Show("Battery Cell Count", "Cell Count", ref CellCount))

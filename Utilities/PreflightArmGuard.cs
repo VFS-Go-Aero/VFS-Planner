@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using GMap.NET;
@@ -10,6 +11,37 @@ namespace MissionPlanner.Utilities
     public static class PreflightArmGuard
     {
         public static string LastBlockReason { get; private set; }
+
+        /// <summary>
+        /// Text for an arm-failed dialog. Prefers live status text, then the GCS block reason,
+        /// then recent PreArm lines already stored on the vehicle.
+        /// </summary>
+        public static string ArmFailureDetail(string liveStatusText)
+        {
+            if (!string.IsNullOrWhiteSpace(liveStatusText))
+                return liveStatusText.Trim();
+
+            if (!string.IsNullOrWhiteSpace(LastBlockReason))
+                return LastBlockReason;
+
+            var messages = MainV2.comPort?.MAV?.cs?.messages;
+            if (messages != null)
+            {
+                var prearm = messages
+                    .Where(m => !string.IsNullOrWhiteSpace(m.message) &&
+                                m.message.StartsWith("PreArm", StringComparison.OrdinalIgnoreCase))
+                    .Select(m => m.message.Trim())
+                    .Distinct()
+                    .Reverse()
+                    .Take(6)
+                    .Reverse()
+                    .ToList();
+                if (prearm.Count > 0)
+                    return string.Join(Environment.NewLine, prearm);
+            }
+
+            return "No autopilot status text was received.";
+        }
 
         public static bool CanArm(CheckListControl checklist, out string reason)
         {

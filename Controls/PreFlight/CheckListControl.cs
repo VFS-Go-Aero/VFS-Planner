@@ -142,7 +142,7 @@ namespace MissionPlanner.Controls.PreFlight
                     if (item.Name.StartsWith("utext"))
                     {
                         item.Text = data.CLItem.DisplayText();
-                        data.desc.Text = data.CLItem.Description;
+                        data.desc.Text = BlockerDescription(data.CLItem);
                     }
                     if (item.Name.StartsWith("utickbox"))
                     {
@@ -187,7 +187,7 @@ namespace MissionPlanner.Controls.PreFlight
 
         Control addwarningcontrol(int x, int y, CheckListItem item, bool hideforchild = false)
         {
-            var desctext = item.Description;
+            var desctext = BlockerDescription(item);
             var texttext = item.DisplayText();
 
             var height = TextRenderer.MeasureText(desctext, this.Font).Height;
@@ -318,14 +318,8 @@ namespace MissionPlanner.Controls.PreFlight
                 loadfile = configfiledefault;
             }
 
-            System.Xml.Serialization.XmlSerializer reader =
-                new System.Xml.Serialization.XmlSerializer(typeof(List<CheckListItem>),
-                    new Type[] { typeof(CheckListItem) });
-
-            using (StreamReader sr = new StreamReader(loadfile))
-            {
-                CheckListItems = (List<CheckListItem>)reader.Deserialize(sr);
-            }
+            LoadFromPath(loadfile);
+            MergeMissingArmingBlockers(configfiledefault);
         }
 
         /// <summary>Load vehicle/stage-specific checklist template from default XML.</summary>
@@ -340,10 +334,61 @@ namespace MissionPlanner.Controls.PreFlight
                 return;
 
             configfiledefault = path;
-            LoadConfig();
+            // The saved missionChecklist.xml must not hide the stage template.
+            LoadFromPath(path);
             lock (CheckListItems)
                 rowcount = 0;
             Draw();
+        }
+
+        static string BlockerDescription(CheckListItem item)
+        {
+            if (item == null)
+                return "";
+            return item.IsArmingBlocker ? item.Description + "  [blocks arm]" : item.Description;
+        }
+
+        void LoadFromPath(string loadfile)
+        {
+            if (string.IsNullOrEmpty(loadfile) || !File.Exists(loadfile))
+                return;
+
+            var reader = new System.Xml.Serialization.XmlSerializer(typeof(List<CheckListItem>),
+                new Type[] { typeof(CheckListItem) });
+
+            using (StreamReader sr = new StreamReader(loadfile))
+            {
+                CheckListItems = (List<CheckListItem>)reader.Deserialize(sr);
+            }
+        }
+
+        void MergeMissingArmingBlockers(string templatePath)
+        {
+            if (string.IsNullOrEmpty(templatePath) || !File.Exists(templatePath))
+                return;
+
+            List<CheckListItem> template;
+            var reader = new System.Xml.Serialization.XmlSerializer(typeof(List<CheckListItem>),
+                new Type[] { typeof(CheckListItem) });
+            using (var sr = new StreamReader(templatePath))
+                template = (List<CheckListItem>)reader.Deserialize(sr);
+
+            if (template == null)
+                return;
+
+            lock (CheckListItems)
+            {
+                foreach (var item in template)
+                {
+                    if (item == null || !item.IsArmingBlocker)
+                        continue;
+                    var already = CheckListItems.Any(existing =>
+                        existing != null &&
+                        string.Equals(existing.Description, item.Description, StringComparison.OrdinalIgnoreCase));
+                    if (!already)
+                        CheckListItems.Add(item);
+                }
+            }
         }
 
         public void SaveConfig()

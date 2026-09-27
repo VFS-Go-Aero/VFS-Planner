@@ -5566,9 +5566,13 @@ Mission Planner waits for 2 valid heartbeat packets before connecting
 
             foreach (var item in list)
             {
-                //exact match, and 0,0 = current primary
-                if (item.msgId == type && buffer.sysid == item.sysid && buffer.compid == item.compid ||
-                    item.msgId == type && item.sysid == 0 && item.compid == 0 && buffer.sysid == sysidcurrent && buffer.compid == compidcurrent)
+                // exact match; 0,0 = current primary; compid 255 = any component on that system
+                var exact = item.msgId == type && buffer.sysid == item.sysid && buffer.compid == item.compid;
+                var primary = item.msgId == type && item.sysid == 0 && item.compid == 0 &&
+                              buffer.sysid == sysidcurrent && buffer.compid == compidcurrent;
+                var anyComponent = item.msgId == type && item.compid == 255 && item.sysid != 0 &&
+                                   buffer.sysid == item.sysid;
+                if (exact || primary || anyComponent)
                 {
                     try
                     {

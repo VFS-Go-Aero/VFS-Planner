@@ -429,8 +429,9 @@ namespace MissionPlanner.Controls
 
                 if (!result)
                 {
+                    var detail = PreflightArmGuard.ArmFailureDetail(sb.ToString());
                     if (CustomMessageBox.Show(
-                            action + " failed.\n" + sb.ToString() + "\nForce " + action +
+                            action + " failed.\n" + detail + "\nForce " + action +
                             " can bypass safety checks,\nwhich can lead to the vehicle crashing\nand causing serious injuries.\n\nDo you wish to Force " +
                             action + "?", Strings.ERROR, CustomMessageBox.MessageBoxButtons.YesNo,
                             CustomMessageBox.MessageBoxIcon.Exclamation, "Force " + action, "Cancel") ==

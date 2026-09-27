@@ -624,6 +624,26 @@ namespace MissionPlanner.Controls
             }
         }
 
+        /// <summary>
+        /// Percent for the HUD icon and label. With a cell count set, this is pack voltage on a LiPo scale
+        /// (3.30 V/cell empty, 4.20 V/cell full — 39.6 V to 50.4 V for 12S), not the autopilot mAh estimate.
+        /// </summary>
+        float PackPercent(float packVolts, float reportedRemaining)
+        {
+            if (_batterycellcount > 0 && packVolts > 1f)
+            {
+                const float emptyPerCell = 3.30f;
+                const float fullPerCell = 4.20f;
+                var cell = packVolts / _batterycellcount;
+                var pct = (cell - emptyPerCell) / (fullPerCell - emptyPerCell) * 100f;
+                if (pct < 0f) pct = 0f;
+                if (pct > 100f) pct = 100f;
+                return pct;
+            }
+
+            return reportedRemaining;
+        }
+
         [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
         public float batteryremaining
         {
@@ -2939,13 +2959,16 @@ namespace MissionPlanner.Controls
                     else
                     {
                         textcolor = _whiteBrush;
-                        if (displayicons)
-                        {
-                            if (_batteryremaining > 75) icon = HUDT.batt_4;
-                            else if (_batteryremaining > 50) icon = HUDT.batt_3;
-                            else if (_batteryremaining > 25) icon = HUDT.batt_2;
-                            else icon = HUDT.batt_1;
-                        }
+                    }
+
+                    var pct1 = PackPercent(_batterylevel, _batteryremaining);
+                    var pct2 = PackPercent(_batterylevel2, _batteryremaining2);
+                    if (!criticalvoltagealert && !lowvoltagealert && displayicons)
+                    {
+                        if (pct1 > 75) icon = HUDT.batt_4;
+                        else if (pct1 > 50) icon = HUDT.batt_3;
+                        else if (pct1 > 25) icon = HUDT.batt_2;
+                        else icon = HUDT.batt_1;
                     }
 
                     int textIdx = 0;
@@ -2965,7 +2988,7 @@ namespace MissionPlanner.Controls
                         DrawImage(icon, 3, this.Height - bottomsize, iconWidth, bottomsize);
                         drawstring(_batterylevel.ToString("0.00v"), font, fontsize, textcolor, textX, yVoltage);
                         drawstring(_current.ToString("0.0A"), font, fontsize, textcolor, textX, yCurrent);
-                        drawstring(_batteryremaining + "%", font, fontsize, textcolor, textX, yPercent);
+                        drawstring(pct1.ToString("0") + "%", font, fontsize, textcolor, textX, yPercent);
 
                         // Battery 2 (if present)
                         if (_batterylevel2 > 0 && batteryon2)
@@ -2973,17 +2996,17 @@ namespace MissionPlanner.Controls
                             // Calculate battery 2 position (to the right of battery 1 with Width/16 gap)
                             var batt1VoltageWidth = calcsize(_batterylevel.ToString("0.00v"), fontsize, textcolor).Width;
                             var batt1CurrentWidth = calcsize(_current.ToString("0.0A"), fontsize, textcolor).Width;
-                            var batt1PercentWidth = calcsize(_batteryremaining + "%", fontsize, textcolor).Width;
+                            var batt1PercentWidth = calcsize(pct1.ToString("0") + "%", fontsize, textcolor).Width;
                             var batt1TextWidth = Math.Max(batt1VoltageWidth, Math.Max(batt1CurrentWidth, batt1PercentWidth));
                             var batt2X = textX + batt1TextWidth + this.Width / 64;
 
                             // Select icon for battery 2
                             Image icon2;
-                            if (_batteryremaining2 > 75)
+                            if (pct2 > 75)
                                 icon2 = HUDT.batt_4;
-                            else if (_batteryremaining2 > 50)
+                            else if (pct2 > 50)
                                 icon2 = HUDT.batt_3;
-                            else if (_batteryremaining2 > 25)
+                            else if (pct2 > 25)
                                 icon2 = HUDT.batt_2;
                             else
                                 icon2 = HUDT.batt_1;
@@ -2992,7 +3015,7 @@ namespace MissionPlanner.Controls
                             var text2X = batt2X + iconWidth + 3;
                             drawstring(_batterylevel2.ToString("0.00v"), font, fontsize, textcolor, text2X, yVoltage);
                             drawstring(_current2.ToString("0.0A"), font, fontsize, textcolor, text2X, yCurrent);
-                            drawstring(_batteryremaining2 + "%", font, fontsize, textcolor, text2X, yPercent);
+                            drawstring(pct2.ToString("0") + "%", font, fontsize, textcolor, text2X, yPercent);
                         }
                     }
                     else
@@ -3003,7 +3026,7 @@ namespace MissionPlanner.Controls
                         else if (_batterylevel2 > 0 && batteryon2)
                         {
                             text = HUDT.Bat + "2 " + _batterylevel2.ToString("0.00v") + " " + _current2.ToString("0.0 A") + " " +
-                                   (_batteryremaining2) + "%";
+                                   pct2.ToString("0") + "%";
 
                             drawstring(text, font, fontsize, textcolor, xPos, yPos[1]);
                         } else {
@@ -3012,7 +3035,7 @@ namespace MissionPlanner.Controls
 
                        
 
-                        text = HUDT.Bat + "1 " + _batterylevel.ToString("0.00v") + " " + _current.ToString("0.0 A") + " " + (_batteryremaining) + "%";
+                        text = HUDT.Bat + "1 " + _batterylevel.ToString("0.00v") + " " + _current.ToString("0.0 A") + " " + pct1.ToString("0") + "%";
                         
                         drawstring(text, font, fontsize, textcolor, xPos, yPos[textIdx]);
 

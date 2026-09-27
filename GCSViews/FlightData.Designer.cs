@@ -350,7 +350,7 @@ namespace MissionPlanner.GCSViews
             this.hud1.altunit = null;
             this.hud1.AOA = 0F;
             this.hud1.BackColor = System.Drawing.Color.Black;
-            this.hud1.batterycellcount = 4;
+            this.hud1.batterycellcount = 12;
             this.hud1.batterylevel = 0F;
             this.hud1.batterylevel2 = 0F;
             this.hud1.batteryon2 = true;

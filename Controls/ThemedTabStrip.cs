@@ -165,6 +165,39 @@ namespace MissionPlanner.Controls
             }
         }
 
+        public void MoveTab(TabPage tabPage, int index)
+        {
+            var current = _tabPagesList.IndexOf(tabPage);
+            if (current < 0)
+                return;
+
+            if (index < 0)
+                index = 0;
+            if (index >= _tabPagesList.Count)
+                index = _tabPagesList.Count - 1;
+            if (current == index)
+                return;
+
+            _tabPagesList.RemoveAt(current);
+            _tabPagesList.Insert(index, tabPage);
+
+            ToolStripButton button = null;
+            foreach (var pair in _tabPages)
+            {
+                if (_originalTabPages.TryGetValue(pair.Value, out var page) && page == tabPage)
+                {
+                    button = pair.Key;
+                    break;
+                }
+            }
+
+            if (button == null)
+                return;
+
+            _toolStrip.Items.Remove(button);
+            _toolStrip.Items.Insert(index, button);
+        }
+
         public void AddTab(TabPage tabPage)
         {
             // Reuse the panel if we've already wrapped this TabPage before
