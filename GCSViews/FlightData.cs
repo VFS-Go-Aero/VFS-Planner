@@ -310,6 +310,7 @@ namespace MissionPlanner.GCSViews
         GMapMarker marker;
 
         int messagecount;
+        string _lastGcsMessagesFingerprint;
 
         //whether or not the output console has already started
         bool outputwindowstarted;
@@ -1000,6 +1001,12 @@ namespace MissionPlanner.GCSViews
             tabMissionChecklist.Controls.Add(_preflightSummaryPanel);
             tabMissionChecklist.Controls.Add(missionChecklistControl);
             missionChecklistControl.Dock = DockStyle.Fill;
+            missionChecklistControl.ReadyToArmRequested += OnMissionChecklistReadyToArm;
+            missionChecklistControl.ChecklistProgressReset += () =>
+            {
+                _flightStagePanel?.RefreshStatus();
+                RefreshPreflightSummaryIfNeeded();
+            };
 
             if (Settings.Instance.ContainsKey("preflight_last_stage") &&
                 int.TryParse(Settings.Instance["preflight_last_stage"].ToString(), out var last) &&
@@ -1084,11 +1091,65 @@ namespace MissionPlanner.GCSViews
 
             missionChecklistControl.AffirmAllManualArmingItems();
             FlightPreflightSession.AffirmAllGreenForArm();
+            FlightPreflightSession.SetGcsReadyToArm(true);
             _flightStagePanel?.RefreshStatus();
             RefreshPreflightSummaryIfNeeded();
             CustomMessageBox.Show(
                 "All green affirmed.\nGCS arming blockers are bypassed for this session.\nAutopilot PreArm can still refuse arm.",
                 "Affirm for arm");
+        }
+
+        void OnMissionChecklistReadyToArm()
+        {
+            if (FlightPreflightSession.Stage == FlightOperationStage.Unselected)
+            {
+                CustomMessageBox.Show("Select Stage 2 or Stage 3 on the Flight Stage tab.", "Ready to arm");
+                return;
+            }
+
+            if (!missionChecklistControl.ArmingChecksPassed)
+            {
+                CustomMessageBox.Show("Complete every checklist item (automatic and manual) first.", "Ready to arm");
+                return;
+            }
+
+            var req = FlightPreflightProfiles.GetRequirements(FlightPreflightSession.Stage);
+            FlightPreflightSession.ConfirmMissionFromChecklist(true,
+                !req.RequireGcoSignOff || MissionChecklistHasGcoSignOff());
+            FlightPreflightSession.SetGcsReadyToArm(true);
+            _flightStagePanel?.RefreshStatus();
+            RefreshPreflightSummaryIfNeeded();
+
+            if (FlightPreflightSession.Stage == FlightOperationStage.Stage2)
+            {
+                var bench = FlightPreflightSession.IndoorBenchMode
+                    ? "\n\nIndoor bench is ON — automatic checklist rows are informational only."
+                    : "";
+                CustomMessageBox.Show(
+                    "GCS preflight complete for Stage 2.\nYou may send Arm from the GCS." + bench +
+                    "\n\nUnderground / no sky view: the autopilot often cannot pass PreArm (no GPS fix, EKF, PRX1: NO DATA, etc.). That is normal on the bench. Use SITL, move outdoors, adjust FC params for bench tests, or Force Arm only if your procedure allows.",
+                    "Ready to arm");
+            }
+            else
+            {
+                CustomMessageBox.Show(
+                    "Checklist complete — GCS ready gate set.\nStage 3 still requires passing sensor, link, and PreArm checks in the summary.",
+                    "Ready to arm");
+            }
+        }
+
+        static bool MissionChecklistHasGcoSignOff()
+        {
+            var items = FlightData.instance?.missionChecklistControl?.CheckListItems;
+            if (items == null)
+                return false;
+
+            return items.Any(i =>
+                i.IsArmingBlocker &&
+                i.ConditionType == MissionPlanner.Controls.PreFlight.CheckListItem.Conditional.NONE &&
+                i.Description != null &&
+                i.Description.IndexOf("GCO", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                i.ManualChecked);
         }
 
         void ShowFlightStageMenu()
@@ -2477,7 +2538,8 @@ namespace MissionPlanner.GCSViews
 
                 if (!isitarmed)
                 {
-                    if (!MissionPlanner.Controls.PreFlight.MissionFlightConfirmForm.PromptIfNeeded(this))
+                    if (FlightPreflightSession.Stage != FlightOperationStage.Stage2 &&
+                        !MissionPlanner.Controls.PreFlight.MissionFlightConfirmForm.PromptIfNeeded(this))
                     {
                         CustomMessageBox.Show(
                             "Complete mission confirmation (PIC/GCO) before arming.",
@@ -6177,20 +6239,27 @@ namespace MissionPlanner.GCSViews
 
         private void Messagetabtimer_Tick(object sender, EventArgs e)
         {
-            var messagetime = MainV2.comPort.MAV.cs.messages.LastOrDefault().time;
-            if (messagecount != messagetime.toUnixTime())
+            try
             {
-                try
+                var cs = MainV2.comPort?.MAV?.cs;
+                if (cs != null && cs.connected && messagesList1 != null)
                 {
-                    // Update the new MessagesList control
-                    messagesList1.UpdateMessages(MainV2.comPort.MAV.cs.messages);
-
-                    messagecount = messagetime.toUnixTime();
+                    var messagetime = cs.messages.LastOrDefault().time;
+                    var fcTick = messagetime.toUnixTime();
+                    var gcsFp = PreflightGcsMessages.GetFingerprint(missionChecklistControl);
+                    if (messagecount != fcTick || !string.Equals(_lastGcsMessagesFingerprint, gcsFp,
+                            StringComparison.Ordinal))
+                    {
+                        var merged = PreflightGcsMessages.MergeForDisplay(cs.messages, missionChecklistControl);
+                        messagesList1.UpdateMessages(merged);
+                        messagecount = fcTick;
+                        _lastGcsMessagesFingerprint = gcsFp;
+                    }
                 }
-                catch (Exception ex)
-                {
-                    log.Error(ex);
-                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex);
             }
 
             coords1.AltUnit = CurrentState.AltUnit;

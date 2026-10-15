@@ -188,7 +188,7 @@ namespace MissionPlanner.Controls
             if (newMessages == null)
                 return;
 
-            if (newMessages.Count == lastMessageCount)
+            if (newMessages.Count == lastMessageCount && MessagesSequenceEqual(messages, newMessages))
                 return;
 
             messages = new List<(DateTime, string, byte)>(newMessages);
@@ -204,6 +204,23 @@ namespace MissionPlanner.Controls
             }
 
             containerPanel.Invalidate();
+        }
+
+        static bool MessagesSequenceEqual(
+            List<(DateTime time, string message, byte severity)> a,
+            List<(DateTime time, string message, byte severity)> b)
+        {
+            if (a == null || b == null)
+                return false;
+            if (a.Count != b.Count)
+                return false;
+            for (var i = 0; i < a.Count; i++)
+            {
+                if (a[i].message != b[i].message || a[i].severity != b[i].severity)
+                    return false;
+            }
+
+            return true;
         }
 
         private void UpdateScrollBar()

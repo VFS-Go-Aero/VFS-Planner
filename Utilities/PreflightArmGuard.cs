@@ -71,6 +71,32 @@ namespace MissionPlanner.Utilities
 
             var cs = MainV2.comPort.MAV.cs;
 
+            // Stage 2: checklist + Ready to arm is the GCS gate (no duplicate PreArm/sensor/mission dialogs).
+            if (FlightPreflightSession.Stage == FlightOperationStage.Stage2)
+            {
+                if (!FlightPreflightSession.GcsReadyToArm && !FlightPreflightSession.ArmAffirmedOverride)
+                {
+                    reason = "Complete the checklist, then press Ready to arm.";
+                    LastBlockReason = reason;
+                    return false;
+                }
+
+                if (Settings.Instance.GetBoolean("armguard_block_tfr", true))
+                {
+                    var conflicts = EvaluateTfrConflicts();
+                    if (conflicts.Count > 0)
+                    {
+                        var first = conflicts[0];
+                        reason = "Active TFR intersects home or mission: " + first.Label;
+                        LastBlockReason = reason;
+                        return false;
+                    }
+                }
+
+                LastBlockReason = null;
+                return true;
+            }
+
             if (Settings.Instance.GetBoolean("armguard_require_prearm", true) && !cs.prearmstatus)
             {
                 reason = "Autopilot PreArm checks are not passing. Open PreArm Status or resolve FC messages.";

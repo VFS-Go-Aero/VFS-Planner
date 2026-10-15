@@ -126,10 +126,23 @@ namespace MissionPlanner.Controls.PreFlight
                     ? "Not selected — use Flight Stage tab"
                     : FlightPreflightProfiles.GetVehicleRequirementsSummary(stage));
 
+            if (FlightPreflightSession.IndoorBenchMode)
+            {
+                AddRow("Indoor bench", true,
+                    "Stage 2 manual checklist only — expect red PreArm/GPS/PRX on the autopilot until outdoors or SITL");
+            }
+
+            AddRow("Ready to arm", FlightPreflightSession.GcsReadyToArm || FlightPreflightSession.ArmAffirmedOverride,
+                FlightPreflightSession.GcsReadyToArm
+                    ? "Checklist affirmed — use Ready to arm on Mission Checklist"
+                    : FlightPreflightSession.ArmAffirmedOverride
+                        ? "All green affirmed — GCS arm blockers bypassed"
+                        : "Press Ready to arm after checklist (Mission Checklist tab)");
+
             AddRow("Arm affirm", FlightPreflightSession.ArmAffirmedOverride,
                 FlightPreflightSession.ArmAffirmedOverride
-                    ? "All green affirmed — GCS arm blockers bypassed"
-                    : "Not affirmed (use Flight Stage tab or button above)");
+                    ? "Debug affirm — all GCS blockers bypassed"
+                    : "Optional (summary toolbar)");
 
             AddRow("Telemetry", true, "Connected · GCS link " + cs.linkqualitygcs + "%");
 

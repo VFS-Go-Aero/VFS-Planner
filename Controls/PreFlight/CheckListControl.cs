@@ -25,8 +25,15 @@ namespace MissionPlanner.Controls.PreFlight
                 {
                     try
                     {
-                        return CheckListItems.Where(item => item.IsArmingBlocker)
-                            .All(item => item.checkCond(item));
+                        var blockers = CheckListItems.Where(item => item.IsArmingBlocker);
+                        if (FlightPreflightSession.IndoorBenchMode &&
+                            FlightPreflightSession.Stage == FlightOperationStage.Stage2)
+                        {
+                            blockers = blockers.Where(item =>
+                                item.ConditionType == CheckListItem.Conditional.NONE);
+                        }
+
+                        return blockers.All(item => item.checkCond(item));
                     }
                     catch
                     {
@@ -37,6 +44,12 @@ namespace MissionPlanner.Controls.PreFlight
         }
 
         int rowcount = 0;
+
+        private Button _btnReadyToArm;
+        private Button _btnResetChecklist;
+
+        public event Action ReadyToArmRequested;
+        public event Action ChecklistProgressReset;
 
         //Controls and the lists for the controls
         private GroupBox gb = new GroupBox();
@@ -83,6 +96,85 @@ namespace MissionPlanner.Controls.PreFlight
             }
 
             timer1.Start();
+
+            _btnReadyToArm = new Button
+            {
+                Dock = DockStyle.Bottom,
+                Height = 52,
+                Text = "Ready to arm",
+                Font = new Font(Font.FontFamily, 12f, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(45, 100, 55),
+                ForeColor = Color.White,
+                Enabled = false,
+                Cursor = Cursors.Hand
+            };
+            _btnReadyToArm.FlatAppearance.BorderColor = Color.FromArgb(80, 160, 90);
+            _btnReadyToArm.Click += (s, e) =>
+            {
+                if (!ArmingChecksPassed)
+                    return;
+                ReadyToArmRequested?.Invoke();
+            };
+            Controls.Add(_btnReadyToArm);
+            _btnReadyToArm.BringToFront();
+
+            _btnResetChecklist = new Button
+            {
+                Anchor = BUT_edit.Anchor,
+                Location = new Point(Math.Max(4, BUT_edit.Left - 96), BUT_edit.Top),
+                Size = new Size(92, BUT_edit.Height),
+                Text = "Reset checklist",
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = Color.White,
+                BackColor = Color.FromArgb(80, 55, 55),
+                Cursor = Cursors.Hand
+            };
+            _btnResetChecklist.FlatAppearance.BorderColor = Color.FromArgb(120, 70, 70);
+            _btnResetChecklist.Click += (s, e) =>
+            {
+                if (CustomMessageBox.Show(
+                        "Clear all manual checklist sign-offs and GCS ready/affirm state?\r\n\r\nAutomatic telemetry rows will update live from the vehicle.",
+                        "Reset checklist",
+                        CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
+                    return;
+                ResetChecklistProgress();
+            };
+            Controls.Add(_btnResetChecklist);
+            _btnResetChecklist.BringToFront();
+        }
+
+        /// <summary>Uncheck manual items, clear ready/affirm, and save so the operator must sign off again.</summary>
+        public void ResetChecklistProgress(bool reloadSavedFile = true)
+        {
+            if (reloadSavedFile && !string.IsNullOrEmpty(configfiledefault) && File.Exists(configfiledefault))
+            {
+                var loadfile = PreflightChecklistPaths.ResolveLoadPath(configfile, configfiledefault);
+                LoadFromPath(loadfile);
+                MergeMissingArmingBlockers(configfiledefault);
+            }
+
+            lock (CheckListItems)
+            {
+                foreach (var item in CheckListItems)
+                {
+                    if (item == null)
+                        continue;
+                    if (item.ConditionType == CheckListItem.Conditional.NONE)
+                        item.ManualChecked = false;
+                }
+
+                rowcount = 0;
+            }
+
+            FlightPreflightSession.ClearGcsReadyToArm();
+            FlightPreflightSession.ClearArmAffirm();
+            FlightPreflightSession.ClearMissionConfirmation();
+            SaveConfig();
+            Draw();
+            UpdateDisplay();
+            UpdateReadyToArmButton();
+            ChecklistProgressReset?.Invoke();
         }
 
         public void Draw()
@@ -126,6 +218,27 @@ namespace MissionPlanner.Controls.PreFlight
                 }
             }
             panel1.Visible = true;
+            UpdateReadyToArmButton();
+        }
+
+        void UpdateReadyToArmButton()
+        {
+            if (_btnReadyToArm == null)
+                return;
+
+            var stageOk = FlightPreflightSession.Stage != FlightOperationStage.Unselected;
+            var checklistOk = ArmingChecksPassed;
+            if (!checklistOk && FlightPreflightSession.GcsReadyToArm)
+                FlightPreflightSession.ClearGcsReadyToArm();
+            _btnReadyToArm.Enabled = stageOk && checklistOk;
+            _btnReadyToArm.BackColor = checklistOk && stageOk
+                ? Color.FromArgb(45, 130, 65)
+                : Color.FromArgb(55, 55, 58);
+            _btnReadyToArm.Text = !stageOk
+                ? "Select Stage 2 or 3 first"
+                : checklistOk
+                    ? "Ready to arm"
+                    : "Complete checklist items above";
         }
 
         void UpdateDisplay()
@@ -160,7 +273,18 @@ namespace MissionPlanner.Controls.PreFlight
 
         private void SetRowState(internaldata data, bool passed)
         {
-            var color = passed ? data.CLItem._TrueColor : data.CLItem._FalseColor;
+            Color color;
+            if (passed)
+            {
+                color = data.CLItem.ConditionType == CheckListItem.Conditional.NONE
+                    ? Color.LimeGreen
+                    : data.CLItem._TrueColor;
+            }
+            else
+            {
+                color = data.CLItem._FalseColor;
+            }
+
             data.text.ForeColor = color;
             data.desc.ForeColor = color;
             if (data.statusIndicator != null)
@@ -217,14 +341,6 @@ namespace MissionPlanner.Controls.PreFlight
                 using (var brush = new SolidBrush(indicator.ForeColor))
                     args.Graphics.FillEllipse(brush, 1, 1, indicator.Width - 2, indicator.Height - 2);
             };
-            tickbox.CheckedChanged += (sender, args) =>
-            {
-                if (item.ConditionType == CheckListItem.Conditional.NONE)
-                {
-                    item.ManualChecked = tickbox.Checked;
-                    SaveConfig();
-                }
-            };
 
             var data = new internaldata
             {
@@ -235,6 +351,18 @@ namespace MissionPlanner.Controls.PreFlight
                 statusIndicator = statusIndicator
             };
             desc.Tag = text.Tag = tickbox.Tag = statusIndicator.Tag = data;
+
+            tickbox.CheckedChanged += (sender, args) =>
+            {
+                if (item.ConditionType == CheckListItem.Conditional.NONE)
+                {
+                    item.ManualChecked = tickbox.Checked;
+                    SaveConfig();
+                    SetRowState(data, tickbox.Checked);
+                    FlightPreflightSession.ClearGcsReadyToArm();
+                    UpdateReadyToArmButton();
+                }
+            };
 
             //Changing the font size of the desc labels text according to amount of characters contained in the label
             desc.TextAlign = ContentAlignment.MiddleLeft;
@@ -261,6 +389,7 @@ namespace MissionPlanner.Controls.PreFlight
             gb.Controls.Add(statusIndicator);
 
             panel1.Controls.Add(gb);
+            SetRowState(data, tickbox.Visible ? tickbox.Checked : item.checkCond(item));
 
             //Add controls to relevant control lists
             groupboxes.Add(gb);
@@ -329,6 +458,7 @@ namespace MissionPlanner.Controls.PreFlight
             var loadfile = PreflightChecklistPaths.ResolveLoadPath(configfile, configfiledefault);
             LoadFromPath(loadfile);
             MergeMissingArmingBlockers(configfiledefault);
+            FlightPreflightSession.ClearGcsReadyToArm();
             lock (CheckListItems)
                 rowcount = 0;
             Draw();
@@ -412,6 +542,7 @@ namespace MissionPlanner.Controls.PreFlight
         {
             Draw();
             UpdateDisplay();
+            UpdateReadyToArmButton();
         }
 
         protected override void OnVisibleChanged(EventArgs e)
@@ -435,6 +566,9 @@ namespace MissionPlanner.Controls.PreFlight
 
         public void Controls_Resize(object sender, EventArgs e)
         {
+            if (_btnReadyToArm != null)
+                panel1.Height = Math.Max(48, ClientSize.Height - panel1.Top - _btnReadyToArm.Height - 4);
+
             // Guard against empty lists
             if (groupboxes.Count == 0 || descLabels.Count == 0 || labels.Count == 0 || checkboxes.Count == 0)
                 return;

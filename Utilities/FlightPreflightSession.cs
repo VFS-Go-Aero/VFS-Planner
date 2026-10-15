@@ -16,6 +16,16 @@ namespace MissionPlanner.Utilities
     {
         public static FlightOperationStage Stage { get; set; } = FlightOperationStage.Unselected;
 
+        /// <summary>
+        /// Bench / indoor: no GPS sky view — Stage 2 checklist ignores automatic telemetry blockers.
+        /// Autopilot PreArm (GPS, PRX, EKF) may still fail until you arm on the bench or use SITL.
+        /// </summary>
+        public static bool IndoorBenchMode
+        {
+            get => Settings.Instance.GetBoolean("preflight_indoor_bench", false);
+            set => Settings.Instance["preflight_indoor_bench"] = value.ToString();
+        }
+
         /// <summary>Display name of the aircraft selected for this session.</summary>
         public static string SelectedVehicle { get; set; }
 
@@ -35,11 +45,17 @@ namespace MissionPlanner.Utilities
 
         public static DateTime? ArmAffirmedUtc { get; private set; }
 
+        /// <summary>Operator pressed Ready to arm after the stage checklist passed (GCS gate).</summary>
+        public static bool GcsReadyToArm { get; private set; }
+
+        public static DateTime? GcsReadyToArmUtc { get; private set; }
+
         public static void SetStage(FlightOperationStage stage)
         {
             Stage = stage;
             ClearMissionConfirmation();
             ClearArmAffirm();
+            ClearGcsReadyToArm();
         }
 
         public static void RecordMissionConfirmation(string missionFingerprint, bool pic, bool gco)
@@ -70,6 +86,25 @@ namespace MissionPlanner.Utilities
         {
             ArmAffirmedOverride = false;
             ArmAffirmedUtc = null;
+        }
+
+        public static void SetGcsReadyToArm(bool ready)
+        {
+            GcsReadyToArm = ready;
+            GcsReadyToArmUtc = ready ? DateTime.UtcNow : (DateTime?)null;
+        }
+
+        public static void ClearGcsReadyToArm()
+        {
+            GcsReadyToArm = false;
+            GcsReadyToArmUtc = null;
+        }
+
+        /// <summary>Record PIC/GCO confirmation from a completed checklist (Stage 2 manual sign-offs).</summary>
+        public static void ConfirmMissionFromChecklist(bool pic, bool gco)
+        {
+            var fp = PreflightTelemetryChecks.BuildMissionFingerprint();
+            RecordMissionConfirmation(fp, pic, gco);
         }
 
         public static bool IsMissionConfirmationCurrent(string currentFingerprint, bool requirePic, bool requireGco)

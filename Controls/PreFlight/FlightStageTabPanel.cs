@@ -14,6 +14,7 @@ namespace MissionPlanner.Controls.PreFlight
         readonly Button _btnStage2;
         readonly Button _btnStage3;
         readonly Button _btnAffirm;
+        readonly CheckBox _chkIndoorBench;
 
         public event Action<FlightOperationStage> StageSelected;
         public event Action AffirmArmRequested;
@@ -35,10 +36,27 @@ namespace MissionPlanner.Controls.PreFlight
             _btnStage2 = MakeStageButton("Stage 2", 56, FlightOperationStage.Stage2);
             _btnStage3 = MakeStageButton("Stage 3", 108, FlightOperationStage.Stage3);
 
+            _chkIndoorBench = new CheckBox
+            {
+                Text = "Indoor / bench (Stage 2: manual checklist only; FC PreArm may still fail)",
+                Location = new Point(16, 168),
+                Size = new Size(420, 40),
+                ForeColor = Color.FromArgb(200, 200, 210),
+                AutoSize = false,
+                Checked = FlightPreflightSession.IndoorBenchMode
+            };
+            _chkIndoorBench.CheckedChanged += (s, e) =>
+            {
+                FlightPreflightSession.IndoorBenchMode = _chkIndoorBench.Checked;
+                FlightPreflightSession.ClearGcsReadyToArm();
+                StageSelected?.Invoke(FlightPreflightSession.Stage);
+                RefreshStatus();
+            };
+
             _btnAffirm = new Button
             {
                 Text = "All is green — affirm for arm",
-                Location = new Point(16, 180),
+                Location = new Point(16, 212),
                 Size = new Size(360, 44),
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = Color.White,
@@ -50,7 +68,7 @@ namespace MissionPlanner.Controls.PreFlight
 
             _lblStatus = new Label
             {
-                Location = new Point(16, 240),
+                Location = new Point(16, 268),
                 Size = new Size(420, 60),
                 ForeColor = Color.Gold,
                 Text = "No stage selected"
@@ -58,15 +76,16 @@ namespace MissionPlanner.Controls.PreFlight
 
             var hint = new Label
             {
-                Location = new Point(16, 300),
-                Size = new Size(420, 48),
+                Location = new Point(16, 328),
+                Size = new Size(420, 56),
                 ForeColor = Color.FromArgb(160, 160, 170),
-                Text = "Affirm skips GCS arming blockers for this session (debug).\r\nAutopilot PreArm can still refuse arm."
+                Text = "Underground / no GPS: use indoor bench for GCS workflow.\r\nAffirm skips GCS blockers; autopilot may still refuse arm (PRX, GPS, EKF)."
             };
 
             Controls.Add(title);
             Controls.Add(_btnStage2);
             Controls.Add(_btnStage3);
+            Controls.Add(_chkIndoorBench);
             Controls.Add(_btnAffirm);
             Controls.Add(_lblStatus);
             Controls.Add(hint);
@@ -108,7 +127,10 @@ namespace MissionPlanner.Controls.PreFlight
             _lblStatus.ForeColor = FlightPreflightSession.ArmAffirmedOverride
                 ? Color.LightGreen
                 : Color.Gold;
-            _lblStatus.Text = "Stage: " + stageText + "\r\nArm: " + affirm;
+            var bench = FlightPreflightSession.IndoorBenchMode ? "\r\nIndoor bench: ON" : "";
+            _lblStatus.Text = "Stage: " + stageText + "\r\nArm: " + affirm + bench;
+            if (_chkIndoorBench != null)
+                _chkIndoorBench.Checked = FlightPreflightSession.IndoorBenchMode;
 
             HighlightStage(stage);
         }
