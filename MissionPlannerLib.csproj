@@ -621,7 +621,10 @@
     <None Update="camerasBuiltin.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="checklistDefault.xml">
+    <None Update="Stage2Checklist.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Stage3Checklist.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="missionChecklistDefault.xml">

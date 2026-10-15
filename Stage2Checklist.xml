@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ArrayOfCheckListItem xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<CheckListItem>
+		<TrueColor>Green</TrueColor>
+		<FalseColor>Red</FalseColor>
+		<Description>BlackBox logging active and MicroSD detected</Description>
+		<Text>{value}</Text>
+		<TriggerValue>1</TriggerValue>
+		<Name>blackbox_logging</Name>
+		<ConditionType>EQ</ConditionType>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>Green</TrueColor>
+		<FalseColor>Red</FalseColor>
+		<Description>Battery charge</Description>
+		<Text>{value} V (target 50.4 V)</Text>
+		<TriggerValue>50.4</TriggerValue>
+		<Name>battery_voltage</Name>
+		<ConditionType>GTEQ</ConditionType>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>Green</TrueColor>
+		<FalseColor>Red</FalseColor>
+		<Description>ADS-B transmitter reports healthy</Description>
+		<Text>TX failure: {value}</Text>
+		<TriggerValue>0</TriggerValue>
+		<Name>xpdr_adsb_tx_sys_fail</Name>
+		<ConditionType>EQ</ConditionType>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>Green</TrueColor>
+		<FalseColor>Red</FalseColor>
+		<Description>GCS link quality ≥ 50%</Description>
+		<Text>Link: {value}%</Text>
+		<TriggerValue>50</TriggerValue>
+		<Name>linkqualitygcs</Name>
+		<ConditionType>GTEQ</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>White</FalseColor>
+		<Description>Verify Remote ID installation and connection</Description>
+		<Text />
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>White</FalseColor>
+		<Description>Verify all fasteners are installed and torqued</Description>
+		<Text />
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>White</FalseColor>
+		<Description>Verify battery restraints are installed</Description>
+		<Text />
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>White</FalseColor>
+		<Description>Complete and pass the shake test</Description>
+		<Text />
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>White</FalseColor>
+		<Description>Verify propellers are installed and secured</Description>
+		<Text />
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>White</FalseColor>
+		<Description>Confirm Cameras are nominal</Description>
+		<Text />
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>Red</FalseColor>
+		<Description>PIC final inspection complete</Description>
+		<Text>Required before arming</Text>
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>Red</FalseColor>
+		<Description>GCO final inspection complete</Description>
+		<Text>Required before arming</Text>
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+</ArrayOfCheckListItem>

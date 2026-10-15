@@ -223,10 +223,11 @@ namespace MissionPlanner.Utilities.AviationLayers
                     var ceiling = props["CEILING"]?.ToObject<int?>() ?? 0;
                     var apt = props["APT1_NAME"]?.ToString() ?? props["APT1_ICAO"]?.ToString() ?? "";
                     var unit = props["UNIT"]?.ToString() ?? "ft";
+                    var grid = props["GRID_ID"]?.ToString() ?? id;
                     return string.IsNullOrEmpty(apt)
-                        ? $"UAS grid max {ceiling} {unit}"
-                        : $"{apt}: max {ceiling} {unit} AGL";
-                });
+                        ? $"Grid {grid}: max {ceiling} {unit} AGL"
+                        : $"{apt} · grid {grid}: max {ceiling} {unit} AGL";
+                }, LaancCellDetails.ApplyFromProperties);
                 var result = new PolygonFetchResult { Polygons = polygons };
                 _cache.Set(key, result);
                 return (result, Ok("uas", "LAANC grid", polygons.Count, DateTime.UtcNow));

@@ -61,7 +61,7 @@ namespace MissionPlanner.Controls.PreFlight
 
         public CheckListControl()
             : this(Settings.GetUserDataDirectory() + "missionChecklist.xml",
-                Settings.GetRunningDirectory() + "missionChecklistDefault.xml")
+                PreflightChecklistPaths.ResolveGeneralDefault())
         {
         }
 
@@ -302,21 +302,12 @@ namespace MissionPlanner.Controls.PreFlight
 
         public void LoadConfig()
         {
-            string loadfile = configfile;
-            var userFileName = Path.GetFileName(configfile);
-            bool isLegacyUserFile =
-                userFileName.Equals("checklist.xml", StringComparison.OrdinalIgnoreCase) ||
-                userFileName.Equals("checklistDefault.xml", StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(configfiledefault) || !File.Exists(configfiledefault))
+                configfiledefault = PreflightChecklistPaths.ResolveGeneralDefault();
 
-            if (isLegacyUserFile || !File.Exists(configfile))
-            {
-                if (!File.Exists(configfiledefault))
-                {
-                    return;
-                }
-
-                loadfile = configfiledefault;
-            }
+            var loadfile = PreflightChecklistPaths.ResolveLoadPath(configfile, configfiledefault);
+            if (!File.Exists(loadfile))
+                return;
 
             LoadFromPath(loadfile);
             MergeMissingArmingBlockers(configfiledefault);
@@ -334,8 +325,10 @@ namespace MissionPlanner.Controls.PreFlight
                 return;
 
             configfiledefault = path;
-            // The saved missionChecklist.xml must not hide the stage template.
-            LoadFromPath(path);
+            configfile = PreflightChecklistPaths.UserConfigPathForStage(stage);
+            var loadfile = PreflightChecklistPaths.ResolveLoadPath(configfile, configfiledefault);
+            LoadFromPath(loadfile);
+            MergeMissingArmingBlockers(configfiledefault);
             lock (CheckListItems)
                 rowcount = 0;
             Draw();

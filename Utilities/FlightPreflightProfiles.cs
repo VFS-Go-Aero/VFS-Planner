@@ -99,16 +99,7 @@ namespace MissionPlanner.Utilities
                     return path;
             }
 
-            var running = Settings.GetRunningDirectory();
-            switch (stage)
-            {
-                case FlightOperationStage.Stage2:
-                    return Path.Combine(running, "missionChecklistStage2Default.xml");
-                case FlightOperationStage.Stage3:
-                    return Path.Combine(running, "missionChecklistStage3Default.xml");
-                default:
-                    return Path.Combine(running, "missionChecklistDefault.xml");
-            }
+            return PreflightChecklistPaths.ResolveDefaultForStage(stage);
         }
 
         public static string GetVehicleRequirementsSummary(FlightOperationStage stage)

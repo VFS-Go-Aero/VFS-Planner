@@ -209,6 +209,7 @@ namespace MissionPlanner.GCSViews
         private bool _mapOverlayCheckInternal;
         private MapOverlayController _mapOverlayController;
         private FlightMapLayerContext _flightMapLayerContext;
+        private FlightMapLayerStack _flightMapStack;
 
         /// <summary>Flight Data map zoom floor (provider MinZoom can raise this).</summary>
         const int FlightMapMinZoom = 1;
@@ -777,7 +778,7 @@ namespace MissionPlanner.GCSViews
             flightSafetyMarkers = new RestrictionMapOverlay("flightsafety");
             gMapControl1.Overlays.Add(flightSafetyMarkers);
 
-            var flightMapStack = new FlightMapLayerStack
+            _flightMapStack = new FlightMapLayerStack
             {
                 Tfr = new TfrMapLayer(tfrpolygons),
                 Airspace = new AirspaceMapLayer(airspacepolygons),
@@ -795,7 +796,7 @@ namespace MissionPlanner.GCSViews
             SyncFlightMapLayerContext();
 
             _mapOverlayController = new MapOverlayController(
-                flightMapStack,
+                _flightMapStack,
                 _flightMapLayerContext,
                 BuildFlightMapVisibility);
             _mapOverlayController.Attach(gMapControl1);
@@ -1140,12 +1141,91 @@ namespace MissionPlanner.GCSViews
             _preflightSummaryPanel.RefreshSummary(missionChecklistControl);
         }
 
+        bool TryPickBriefingItemAt(Point localPoint, out NotamBriefingItem item)
+        {
+            item = null;
+            if (gMapControl1 == null)
+                return false;
+
+            var click = gMapControl1.FromLocalToLatLng(localPoint.X, localPoint.Y);
+            if (click.IsEmpty)
+                return false;
+
+            if (MainV2.ShowUasFacilityMap && uasFacilitypolygons?.IsVisibile == true)
+            {
+                if (TryPickBriefingFromLayer(_flightMapStack?.Uas, click, "LAANC", out item))
+                    return true;
+                if (TryPickBriefingFromOverlay(uasFacilitypolygons, click, "LAANC", out item))
+                    return true;
+            }
+
+            if (MainV2.ShowTFR && tfrpolygons?.IsVisibile == true)
+            {
+                if (TryPickBriefingFromLayer(_flightMapStack?.Tfr, click, "TFR", out item))
+                    return true;
+                if (TryPickBriefingFromOverlay(tfrpolygons, click, "TFR", out item))
+                    return true;
+            }
+
+            return false;
+        }
+
+        static bool TryPickBriefingFromLayer(GMapPolygonFlightLayer layer, PointLatLng click, string type,
+            out NotamBriefingItem item)
+        {
+            item = null;
+            if (layer == null)
+                return false;
+
+            var features = layer.GetFeatures();
+            for (var i = features.Count - 1; i >= 0; i--)
+            {
+                var feat = features[i];
+                if (feat?.Ring == null || feat.Ring.Count < 3)
+                    continue;
+                if (!FlightSafetyAnalyzer.PointInPolygon(click, feat.Ring))
+                    continue;
+                item = BriefingListBuilder.FromPolygon(feat, type);
+                return true;
+            }
+
+            return false;
+        }
+
+        static bool TryPickBriefingFromOverlay(GMapOverlay overlay, PointLatLng click, string type,
+            out NotamBriefingItem item)
+        {
+            item = null;
+            if (overlay?.Polygons == null)
+                return false;
+
+            for (var i = overlay.Polygons.Count - 1; i >= 0; i--)
+            {
+                if (!(overlay.Polygons[i] is GMapPolygon poly) || !poly.IsVisible)
+                    continue;
+                if (!(poly.Tag is MapPolygonFeature feat))
+                    continue;
+
+                var ring = feat.Ring ?? poly.Points;
+                if (ring == null || ring.Count < 3)
+                    continue;
+                if (!FlightSafetyAnalyzer.PointInPolygon(click, ring))
+                    continue;
+
+                item = BriefingListBuilder.FromPolygon(feat, type);
+                return true;
+            }
+
+            return false;
+        }
+
         private void SetupNotamBriefingPanel()
         {
             _notamBriefHost = new Panel
             {
                 Dock = DockStyle.Right,
-                Width = 300,
+                Width = 380,
+                MinimumSize = new Size(280, 0),
                 BackColor = Color.FromArgb(38, 38, 42),
                 Visible = false,
                 Name = "notamBriefHost"
@@ -8150,9 +8230,13 @@ namespace MissionPlanner.GCSViews
                 }
             }
 
-            if (Math.Abs(posstart.X - e.X) <=2 && Math.Abs(posstart.Y - e.Y) <=2 && e.Button == MouseButtons.Left)
+            if (Math.Abs(posstart.X - e.X) <= 2 && Math.Abs(posstart.Y - e.Y) <= 2 && e.Button == MouseButtons.Left)
             {
-               // contextMenuStripMap.Show(gMapControl1, e.Location);
+                if (TryPickBriefingItemAt(e.Location, out var picked))
+                {
+                    SetNotamBriefPanelVisible(true);
+                    _notamBriefPanel?.SelectItem(picked);
+                }
             }
         }
 

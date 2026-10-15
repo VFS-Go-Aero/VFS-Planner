@@ -60,7 +60,7 @@ namespace MissionPlanner.Utilities.AviationLayers
                     var poly = new GMapPolygon(feat.Ring, layer.PolygonNamePrefix + feat.Id);
                     poly.Fill = new SolidBrush(layer.FillColor);
                     poly.Stroke = new Pen(layer.StrokeColor, layer.StrokeWidthPx);
-                    poly.Tag = feat.ToolTip;
+                    poly.Tag = feat;
                     poly.IsVisible = true;
                     layer.MapOverlay.Polygons.Add(poly);
                 }

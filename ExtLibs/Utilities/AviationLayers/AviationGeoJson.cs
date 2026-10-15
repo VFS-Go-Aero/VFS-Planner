@@ -95,7 +95,8 @@ namespace MissionPlanner.Utilities.AviationLayers
             return result;
         }
 
-        public static List<MapPolygonFeature> ParseArcGisPolygons(string json, Func<JObject, string, string> tooltipBuilder)
+        public static List<MapPolygonFeature> ParseArcGisPolygons(string json, Func<JObject, string, string> tooltipBuilder,
+            Action<JObject, MapPolygonFeature> enrichFeature = null)
         {
             var result = new List<MapPolygonFeature>();
             if (string.IsNullOrWhiteSpace(json))
@@ -119,13 +120,15 @@ namespace MissionPlanner.Utilities.AviationLayers
                 {
                     if (ring.Count >= 3)
                     {
-                        result.Add(new MapPolygonFeature
+                        var mapped = new MapPolygonFeature
                         {
                             Id = id,
                             Title = tooltip,
                             ToolTip = tooltip,
                             Ring = ring
-                        });
+                        };
+                        enrichFeature?.Invoke(props, mapped);
+                        result.Add(mapped);
                     }
                 }
             }

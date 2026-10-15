@@ -44,6 +44,7 @@ namespace MissionPlanner.Utilities.AviationLayers
         public string Id { get; set; }
         public string Title { get; set; }
         public string ToolTip { get; set; }
+        public string DetailText { get; set; }
         public List<PointLatLng> Ring { get; set; } = new List<PointLatLng>();
     }
 

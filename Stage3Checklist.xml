@@ -26,6 +26,7 @@
 		<TriggerValue>0</TriggerValue>
 		<Name>xpdr_adsb_tx_sys_fail</Name>
 		<ConditionType>EQ</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
 	</CheckListItem>
 	<CheckListItem>
 		<TrueColor>Green</TrueColor>
@@ -70,15 +71,6 @@
 	<CheckListItem>
 		<TrueColor>Green</TrueColor>
 		<FalseColor>Red</FalseColor>
-		<Description>{FENCE_ENABLE}</Description>
-		<Text>Fence enable: {value}</Text>
-		<TriggerValue>1</TriggerValue>
-		<Name>PARAM</Name>
-		<ConditionType>GTEQ</ConditionType>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
 		<Description>GCS link quality ≥ 50%</Description>
 		<Text>Link: {value}%</Text>
 		<TriggerValue>50</TriggerValue>
@@ -86,12 +78,10 @@
 		<ConditionType>GTEQ</ConditionType>
 		<IsArmingBlocker>true</IsArmingBlocker>
 	</CheckListItem>
-
-	
 	<CheckListItem>
 		<TrueColor>White</TrueColor>
 		<FalseColor>White</FalseColor>
-		<Description>Verify motor spin direction</Description>
+		<Description>Confirm all sensors report healthy on status tab</Description>
 		<Text />
 		<TriggerValue>0</TriggerValue>
 		<Name>roll</Name>
@@ -101,7 +91,7 @@
 	<CheckListItem>
 		<TrueColor>White</TrueColor>
 		<FalseColor>White</FalseColor>
-		<Description>Verify Remote ID installation and connection</Description>
+		<Description>Confirm radio control and telemetry are nominal</Description>
 		<Text />
 		<TriggerValue>0</TriggerValue>
 		<Name>roll</Name>
@@ -111,47 +101,7 @@
 	<CheckListItem>
 		<TrueColor>White</TrueColor>
 		<FalseColor>White</FalseColor>
-		<Description>Verify all fasteners are installed and torqued</Description>
-		<Text />
-		<TriggerValue>0</TriggerValue>
-		<Name>roll</Name>
-		<ConditionType>NONE</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>White</TrueColor>
-		<FalseColor>White</FalseColor>
-		<Description>Verify battery restraints are installed</Description>
-		<Text />
-		<TriggerValue>0</TriggerValue>
-		<Name>roll</Name>
-		<ConditionType>NONE</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>White</TrueColor>
-		<FalseColor>White</FalseColor>
-		<Description>Complete and pass the shake test</Description>
-		<Text />
-		<TriggerValue>0</TriggerValue>
-		<Name>roll</Name>
-		<ConditionType>NONE</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>White</TrueColor>
-		<FalseColor>White</FalseColor>
-		<Description>Verify propellers are installed and secured</Description>
-		<Text />
-		<TriggerValue>0</TriggerValue>
-		<Name>roll</Name>
-		<ConditionType>NONE</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>White</TrueColor>
-		<FalseColor>White</FalseColor>
-		<Description>Confirm Cameras are nominal</Description>
+		<Description>Review ADS-B traffic near mission / home (Stage 3)</Description>
 		<Text />
 		<TriggerValue>0</TriggerValue>
 		<Name>roll</Name>

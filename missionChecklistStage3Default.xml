@@ -26,62 +26,13 @@
 		<TriggerValue>0</TriggerValue>
 		<Name>xpdr_adsb_tx_sys_fail</Name>
 		<ConditionType>EQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
 	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>GPS 3D fix (fix type ≥ 3)</Description>
-		<Text>Fix type: {value}</Text>
-		<TriggerValue>3</TriggerValue>
-		<Name>gpsstatus</Name>
-		<ConditionType>GTEQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>GPS HDOP ≤ 2.5</Description>
-		<Text>HDOP: {value}</Text>
-		<TriggerValue>2.5</TriggerValue>
-		<Name>gpshdop</Name>
-		<ConditionType>LTEQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>Minimum satellite count</Description>
-		<Text>Sats: {value}</Text>
-		<TriggerValue>8</TriggerValue>
-		<Name>satcount</Name>
-		<ConditionType>GTEQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>Autopilot PreArm checks passing</Description>
-		<Text>PreArm OK: {value}</Text>
-		<TriggerValue>1</TriggerValue>
-		<Name>prearmstatus</Name>
-		<ConditionType>EQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>GCS link quality ≥ 50%</Description>
-		<Text>Link: {value}%</Text>
-		<TriggerValue>50</TriggerValue>
-		<Name>linkqualitygcs</Name>
-		<ConditionType>GTEQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
+
+
 	<CheckListItem>
 		<TrueColor>White</TrueColor>
 		<FalseColor>White</FalseColor>
-		<Description>Confirm all sensors report healthy on status tab</Description>
+		<Description>Verify motor spin direction</Description>
 		<Text />
 		<TriggerValue>0</TriggerValue>
 		<Name>roll</Name>
@@ -91,7 +42,7 @@
 	<CheckListItem>
 		<TrueColor>White</TrueColor>
 		<FalseColor>White</FalseColor>
-		<Description>Confirm radio control and telemetry are nominal</Description>
+		<Description>Verify Remote ID installation and connection</Description>
 		<Text />
 		<TriggerValue>0</TriggerValue>
 		<Name>roll</Name>
@@ -101,7 +52,37 @@
 	<CheckListItem>
 		<TrueColor>White</TrueColor>
 		<FalseColor>White</FalseColor>
-		<Description>Review ADS-B traffic near mission / home (Stage 3)</Description>
+		<Description>Verify all fasteners are installed and torqued</Description>
+		<Text />
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>White</FalseColor>
+		<Description>Verify battery restraints are installed</Description>
+		<Text />
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>White</FalseColor>
+		<Description>Complete and pass the shake test</Description>
+		<Text />
+		<TriggerValue>0</TriggerValue>
+		<Name>roll</Name>
+		<ConditionType>NONE</ConditionType>
+		<IsArmingBlocker>true</IsArmingBlocker>
+	</CheckListItem>
+	<CheckListItem>
+		<TrueColor>White</TrueColor>
+		<FalseColor>White</FalseColor>
+		<Description>Verify propellers are installed and secured</Description>
 		<Text />
 		<TriggerValue>0</TriggerValue>
 		<Name>roll</Name>

@@ -62,7 +62,7 @@ Settings for these layers are stored in planner settings (same keys as the check
 
 ## Preflight & arming
 
-**Mission Checklist** includes a **preflight summary** at the top (link, GPS, PreArm, TFR conflicts, etc.) and checklist items from `checklistDefault.xml` / your saved mission checklist.
+**Mission Checklist** includes a **preflight summary** at the top (link, GPS, PreArm, TFR conflicts, etc.) and checklist items from `Stage2Checklist.xml` / `Stage3Checklist.xml` / your saved mission checklist.
 
 Arming can be blocked when:
 

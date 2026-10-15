@@ -123,7 +123,7 @@ namespace MissionPlanner.Utilities.AviationLayers
             }
         }
 
-        static NotamBriefingItem FromPolygon(MapPolygonFeature poly, string type)
+        public static NotamBriefingItem FromPolygon(MapPolygonFeature poly, string type)
         {
             var center = Centroid(poly.Ring);
             return new NotamBriefingItem
@@ -131,7 +131,8 @@ namespace MissionPlanner.Utilities.AviationLayers
                 NotamKey = poly.Id ?? type,
                 Type = type,
                 Title = Truncate(string.IsNullOrWhiteSpace(poly.ToolTip) ? poly.Title : poly.ToolTip, 160),
-                Center = center
+                Center = center,
+                DetailText = poly.DetailText
             };
         }
 

@@ -11,6 +11,7 @@ namespace MissionPlanner.Utilities
         public string LastModified { get; set; }
         public PointLatLng Center { get; set; }
         public string DetailUrl { get; set; }
+        public string DetailText { get; set; }
 
         public string DisplayId =>
             string.IsNullOrEmpty(NotamKey) ? "—" : NotamKey.Split('-')[0];

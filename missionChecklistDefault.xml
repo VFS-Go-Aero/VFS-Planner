@@ -27,65 +27,8 @@
 		<Name>xpdr_adsb_tx_sys_fail</Name>
 		<ConditionType>EQ</ConditionType>
 	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>GPS 3D fix (fix type ≥ 3)</Description>
-		<Text>Fix type: {value}</Text>
-		<TriggerValue>3</TriggerValue>
-		<Name>gpsstatus</Name>
-		<ConditionType>GTEQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>GPS HDOP ≤ 2.5</Description>
-		<Text>HDOP: {value}</Text>
-		<TriggerValue>2.5</TriggerValue>
-		<Name>gpshdop</Name>
-		<ConditionType>LTEQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>Minimum satellite count</Description>
-		<Text>Sats: {value}</Text>
-		<TriggerValue>8</TriggerValue>
-		<Name>satcount</Name>
-		<ConditionType>GTEQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>Autopilot PreArm checks passing</Description>
-		<Text>PreArm OK: {value}</Text>
-		<TriggerValue>1</TriggerValue>
-		<Name>prearmstatus</Name>
-		<ConditionType>EQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>{FENCE_ENABLE}</Description>
-		<Text>Fence enable: {value}</Text>
-		<TriggerValue>1</TriggerValue>
-		<Name>PARAM</Name>
-		<ConditionType>GTEQ</ConditionType>
-	</CheckListItem>
-	<CheckListItem>
-		<TrueColor>Green</TrueColor>
-		<FalseColor>Red</FalseColor>
-		<Description>GCS link quality ≥ 50%</Description>
-		<Text>Link: {value}%</Text>
-		<TriggerValue>50</TriggerValue>
-		<Name>linkqualitygcs</Name>
-		<ConditionType>GTEQ</ConditionType>
-		<IsArmingBlocker>true</IsArmingBlocker>
-	</CheckListItem>
+
+
 	<CheckListItem>
 		<TrueColor>White</TrueColor>
 		<FalseColor>White</FalseColor>
