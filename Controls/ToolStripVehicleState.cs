@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Windows.Forms.Design;
+using MissionPlanner.GCSViews;
 using MissionPlanner.Utilities;
 
 namespace MissionPlanner.Controls
@@ -404,9 +405,19 @@ namespace MissionPlanner.Controls
                 bool isArmed = MainV2.comPort.MAV?.cs?.armed ?? false;
                 string action = isArmed ? "Disarm" : "Arm";
 
-                // Show confirmation dialog when arming (with "show me again" option)
                 if (!isArmed)
                 {
+                    var checklist = FlightData.instance?.MissionChecklist;
+                    if (!PreflightArmGuard.CanArm(checklist, out var blockReason))
+                    {
+                        CustomMessageBox.Show(
+                            string.IsNullOrWhiteSpace(blockReason)
+                                ? PreflightArmGuard.VehiclePreflightChecklistMessage
+                                : blockReason,
+                            "Arming blocked");
+                        return;
+                    }
+
                     var confirmResult = Common.MessageShowAgain(
                         "Arm Vehicle",
                         "Please confirm you'd like to ARM the vehicle.",

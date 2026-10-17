@@ -10,19 +10,21 @@ namespace MissionPlanner.Utilities
 {
     public static class PreflightArmGuard
     {
+        public const string VehiclePreflightChecklistMessage = "Please complete Vehicle Preflight Checklist";
+
         public static string LastBlockReason { get; private set; }
 
         /// <summary>
-        /// Text for an arm-failed dialog. Prefers live status text, then the GCS block reason,
+        /// Text for an arm-failed dialog. Prefers the GCS block reason, then live status text,
         /// then recent PreArm lines already stored on the vehicle.
         /// </summary>
         public static string ArmFailureDetail(string liveStatusText)
         {
-            if (!string.IsNullOrWhiteSpace(liveStatusText))
-                return liveStatusText.Trim();
-
             if (!string.IsNullOrWhiteSpace(LastBlockReason))
                 return LastBlockReason;
+
+            if (!string.IsNullOrWhiteSpace(liveStatusText))
+                return liveStatusText.Trim();
 
             var messages = MainV2.comPort?.MAV?.cs?.messages;
             if (messages != null)
@@ -64,23 +66,24 @@ namespace MissionPlanner.Utilities
 
             if (checklist != null && !checklist.ArmingChecksPassed)
             {
-                reason = "Mission checklist incomplete (including PIC/GCO sign-off).";
+                reason = VehiclePreflightChecklistMessage;
+                LastBlockReason = reason;
+                return false;
+            }
+
+            if (FlightPreflightSession.Stage != FlightOperationStage.Unselected &&
+                !FlightPreflightSession.GcsReadyToArm)
+            {
+                reason = VehiclePreflightChecklistMessage;
                 LastBlockReason = reason;
                 return false;
             }
 
             var cs = MainV2.comPort.MAV.cs;
 
-            // Stage 2: checklist + Ready to arm is the GCS gate (no duplicate PreArm/sensor/mission dialogs).
+            // Stage 2: GCS gate only (no duplicate PreArm/sensor/mission dialogs).
             if (FlightPreflightSession.Stage == FlightOperationStage.Stage2)
             {
-                if (!FlightPreflightSession.GcsReadyToArm && !FlightPreflightSession.ArmAffirmedOverride)
-                {
-                    reason = "Complete the checklist, then press Ready to arm.";
-                    LastBlockReason = reason;
-                    return false;
-                }
-
                 if (Settings.Instance.GetBoolean("armguard_block_tfr", true))
                 {
                     var conflicts = EvaluateTfrConflicts();

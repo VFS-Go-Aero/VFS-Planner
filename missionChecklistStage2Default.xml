@@ -14,7 +14,7 @@
 		<FalseColor>Red</FalseColor>
 		<Description>Battery charge</Description>
 		<Text>{value} V (target 50.4 V)</Text>
-		<TriggerValue>50.4</TriggerValue>
+		<TriggerValue>48.0</TriggerValue>
 		<Name>battery_voltage</Name>
 		<ConditionType>GTEQ</ConditionType>
 	</CheckListItem>

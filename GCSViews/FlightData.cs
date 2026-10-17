@@ -41,6 +41,9 @@ namespace MissionPlanner.GCSViews
     public partial class FlightData : MyUserControl, IActivate, IDeactivate
     {
         public static FlightData instance;
+
+        internal Controls.PreFlight.CheckListControl MissionChecklist => missionChecklistControl;
+
         public static GMapOverlay kmlpolygons;
         public static HUD myhud;
         public static readonly GStreamer hudGStreamer = new GStreamer();
@@ -2551,7 +2554,7 @@ namespace MissionPlanner.GCSViews
                     {
                         CustomMessageBox.Show(
                             string.IsNullOrEmpty(armBlockReason)
-                                ? "Preflight checks must pass before arming."
+                                ? PreflightArmGuard.VehiclePreflightChecklistMessage
                                 : armBlockReason,
                             "Arming blocked");
                         return;
@@ -7582,6 +7585,11 @@ namespace MissionPlanner.GCSViews
             if (_themedTabStrip.SelectedTab == tabPagemessages)
             {
                 Messagetabtimer.Start();
+            }
+            else if (_themedTabStrip.SelectedTab == tabObstacle)
+            {
+                _obstacleGraph?.Start();
+                _obstacleGraph?.RefreshView();
             }
             else if (_themedTabStrip.SelectedTab == tabParams)
             {

@@ -132,12 +132,13 @@ namespace MissionPlanner.Controls.PreFlight
                     "Stage 2 manual checklist only — expect red PreArm/GPS/PRX on the autopilot until outdoors or SITL");
             }
 
-            AddRow("Ready to arm", FlightPreflightSession.GcsReadyToArm || FlightPreflightSession.ArmAffirmedOverride,
+            var gcsReady = FlightPreflightSession.GcsReadyToArm || FlightPreflightSession.ArmAffirmedOverride;
+            AddRow("Ready to arm", gcsReady,
                 FlightPreflightSession.GcsReadyToArm
-                    ? "Checklist affirmed — use Ready to arm on Mission Checklist"
+                    ? "Ready to arm pressed — GCS preflight gate set"
                     : FlightPreflightSession.ArmAffirmedOverride
                         ? "All green affirmed — GCS arm blockers bypassed"
-                        : "Press Ready to arm after checklist (Mission Checklist tab)");
+                        : PreflightArmGuard.VehiclePreflightChecklistMessage);
 
             AddRow("Arm affirm", FlightPreflightSession.ArmAffirmedOverride,
                 FlightPreflightSession.ArmAffirmedOverride
@@ -204,7 +205,10 @@ namespace MissionPlanner.Controls.PreFlight
 
             string ignore;
             var armOk = PreflightArmGuard.CanArm(checklist, out ignore);
-            SetReady(armOk, armOk ? "Ready to arm (all ArmGuard checks passed)" : PreflightArmGuard.LastBlockReason);
+            var statusText = armOk
+                ? "Ready to arm (all ArmGuard checks passed)"
+                : (PreflightArmGuard.LastBlockReason ?? PreflightArmGuard.VehiclePreflightChecklistMessage);
+            SetReady(armOk, statusText);
 
             _table.ResumeLayout(true);
         }

@@ -75,35 +75,16 @@ namespace MissionPlanner.Utilities
                 yield break;
 
             var pending = GetBlockingItems(checklist).Where(i => !i.checkCond(i)).ToList();
-            foreach (var item in pending.Take(12))
+            if (pending.Count > 0 ||
+                (!FlightPreflightSession.GcsReadyToArm && !FlightPreflightSession.ArmAffirmedOverride))
             {
-                var detail = item.ConditionType == CheckListItem.Conditional.NONE
-                    ? "manual sign-off required"
-                    : item.DisplayText();
-                if (string.IsNullOrWhiteSpace(detail))
-                    detail = "check failing";
-                yield return (now, Prefix + item.Description + " — " + detail, (byte)MAV_SEVERITY.WARNING);
-            }
-
-            if (pending.Count > 12)
-            {
-                yield return (now, Prefix + (pending.Count - 12) + " more checklist item(s) incomplete.",
+                yield return (now, Prefix + PreflightArmGuard.VehiclePreflightChecklistMessage,
                     (byte)MAV_SEVERITY.WARNING);
+                yield break;
             }
 
-            if (pending.Count == 0)
-            {
-                if (!FlightPreflightSession.GcsReadyToArm && !FlightPreflightSession.ArmAffirmedOverride)
-                {
-                    yield return (now, Prefix + "Checklist complete — press Ready to arm on Mission Checklist.",
-                        (byte)MAV_SEVERITY.NOTICE);
-                }
-                else
-                {
-                    yield return (now, Prefix + "Checklist complete — GCS ready gate set for " + stage + ".",
-                        (byte)MAV_SEVERITY.INFO);
-                }
-            }
+            yield return (now, Prefix + "Checklist complete — GCS ready gate set for " + stage + ".",
+                (byte)MAV_SEVERITY.INFO);
 
             if (FlightPreflightSession.IndoorBenchMode && stage == FlightOperationStage.Stage2)
             {

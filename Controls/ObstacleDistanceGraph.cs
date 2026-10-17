@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 using MissionPlanner.Utilities;
 using ZedGraph;
@@ -8,7 +10,7 @@ using ZedGraph;
 namespace MissionPlanner.Controls
 {
     /// <summary>
-    /// OBSTACLE_DISTANCE_3D x, y, and z (meters) overlaid on one plot against time.
+    /// OBSTACLE_DISTANCE_3D: one trace per obstacle_id of |position| (m) vs time.
     /// compid 255 on the subscription means any component on the current system.
     /// </summary>
     public class ObstacleDistanceGraph : UserControl
@@ -17,21 +19,32 @@ namespace MissionPlanner.Controls
         const double DefaultWindowSeconds = 5;
         const double YPaddingRatio = 0.12;
         const double MinYPadding = 0.05;
-        const int ScrubMax = 1000;
-        const int ScrubLiveSnapThreshold = 20;
+        const int MaxTrackedObstacles = 24;
+        const int PointsPerObstacle = 2000;
 
-        static readonly Color ColorX = Color.White;
-        static readonly Color ColorY = Color.FromArgb(120, 220, 255);
-        static readonly Color ColorZ = Color.FromArgb(255, 200, 120);
+        static readonly Color[] TrackColors =
+        {
+            Color.White,
+            Color.FromArgb(120, 220, 255),
+            Color.FromArgb(255, 200, 120),
+            Color.FromArgb(180, 255, 140),
+            Color.FromArgb(255, 140, 200),
+            Color.FromArgb(200, 180, 255),
+            Color.FromArgb(255, 240, 120),
+            Color.FromArgb(120, 255, 220)
+        };
 
-        readonly System.Windows.Forms.Label _header;
-        readonly Panel _scrubPanel;
-        readonly TrackBar _timeScrub;
-        readonly Button _liveButton;
+        sealed class ObstacleTrack
+        {
+            public ushort Id;
+            public RollingPointPairList Points = new RollingPointPairList(PointsPerObstacle);
+            public Color Color;
+            public LineItem Curve;
+            public DateTime LastSeenUtc;
+        }
+
         readonly ZedGraphControl _graph;
-        readonly RollingPointPairList _x = new RollingPointPairList(2000);
-        readonly RollingPointPairList _y = new RollingPointPairList(2000);
-        readonly RollingPointPairList _z = new RollingPointPairList(2000);
+        readonly Dictionary<ushort, ObstacleTrack> _tracks = new Dictionary<ushort, ObstacleTrack>();
         readonly ConcurrentQueue<(MAVLink.mavlink_obstacle_distance_3d_t sample, double t)> _pending =
             new ConcurrentQueue<(MAVLink.mavlink_obstacle_distance_3d_t, double)>();
         readonly Timer _timer;
@@ -39,91 +52,66 @@ namespace MissionPlanner.Controls
         int _subscription;
         byte _subscribedSysid;
         bool _hasSample;
-        MAVLink.mavlink_obstacle_distance_3d_t _last;
         double _lastPlotTimeSec;
         double _windowSeconds = DefaultWindowSeconds;
         DateTime _plotOriginUtc = DateTime.UtcNow;
         bool _followLive = true;
         bool _manualYScale;
-        bool _scrubDragging;
-        bool _suppressScrubSync;
+        int _nextColorIndex;
 
         public ObstacleDistanceGraph()
         {
             BackColor = Color.FromArgb(32, 32, 32);
 
-            _header = new System.Windows.Forms.Label
-            {
-                Dock = DockStyle.Top,
-                Height = 28,
-                ForeColor = Color.White,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(8, 0, 0, 0),
-                Text = "OBSTACLE_DISTANCE_3D — waiting for data"
-            };
-
-            _timeScrub = new TrackBar
-            {
-                Dock = DockStyle.Fill,
-                Minimum = 0,
-                Maximum = ScrubMax,
-                TickStyle = TickStyle.None,
-                LargeChange = 40,
-                SmallChange = 8,
-                BackColor = Color.FromArgb(32, 32, 32)
-            };
-            _timeScrub.Scroll += TimeScrub_Scroll;
-            _timeScrub.MouseDown += (s, e) => _scrubDragging = true;
-            _timeScrub.MouseUp += (s, e) =>
-            {
-                _scrubDragging = false;
-                TrySnapToLiveFromScrub();
-            };
-
-            _liveButton = new Button
-            {
-                Text = "Live",
-                Dock = DockStyle.Right,
-                Width = 52,
-                FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.White,
-                BackColor = Color.FromArgb(56, 56, 60)
-            };
-            _liveButton.FlatAppearance.BorderColor = Color.Gainsboro;
-            _liveButton.Click += (s, e) => ResetLiveView();
-
-            _scrubPanel = new Panel
-            {
-                Dock = DockStyle.Bottom,
-                Height = 40,
-                BackColor = BackColor,
-                Padding = new Padding(4, 2, 4, 2)
-            };
-            _scrubPanel.Controls.Add(_timeScrub);
-            _scrubPanel.Controls.Add(_liveButton);
-
             _graph = CreateGraph();
-
+            _graph.Dock = DockStyle.Fill;
+            _graph.MinimumSize = new Size(120, 80);
             Controls.Add(_graph);
-            Controls.Add(_scrubPanel);
-            Controls.Add(_header);
 
             _timer = new Timer { Interval = 100 };
             _timer.Tick += Timer_Tick;
 
-            HandleCreated += (s, e) => SyncGraphLayout(_graph);
-            Resize += (s, e) => SyncGraphLayout(_graph);
+            HandleCreated += (s, e) => LayoutGraphNow();
+            Resize += (s, e) => LayoutGraphNow();
+            VisibleChanged += (s, e) =>
+            {
+                if (Visible)
+                    LayoutGraphNow();
+            };
+        }
+
+        void LayoutGraphNow()
+        {
+            SyncGraphLayout(_graph);
+            if (!_hasSample)
+                PaintEmptyChart();
+        }
+
+        void PaintEmptyChart()
+        {
+            if (_graph == null || _graph.IsDisposed)
+                return;
+
+            var pane = _graph.GraphPane;
+            pane.XAxis.Scale.Min = 0;
+            pane.XAxis.Scale.Max = DefaultWindowSeconds;
+            pane.YAxis.Scale.Min = 0;
+            pane.YAxis.Scale.Max = 10;
+            _graph.AxisChange();
+            _graph.Refresh();
         }
 
         public void Start()
         {
             _plotOriginUtc = DateTime.UtcNow;
-            ResetLiveView();
             EnsureSubscribed();
             ThemeManager.ApplyThemeTo(_graph);
             StyleGraph(_graph);
+            ResetLiveView();
             _timer.Start();
-            SyncGraphLayout(_graph);
+            LayoutGraphNow();
+            if (IsHandleCreated)
+                BeginInvoke(new Action(LayoutGraphNow));
         }
 
         public void Stop()
@@ -133,6 +121,7 @@ namespace MissionPlanner.Controls
 
         public void RefreshView()
         {
+            LayoutGraphNow();
             ApplyScales();
         }
 
@@ -140,7 +129,6 @@ namespace MissionPlanner.Controls
         {
             var graph = new ZedGraphControl
             {
-                Dock = DockStyle.Fill,
                 Name = "zgObstacleDistance",
                 BackColor = Color.FromArgb(48, 48, 52)
             };
@@ -148,13 +136,8 @@ namespace MissionPlanner.Controls
             var pane = graph.GraphPane;
             pane.Title.IsVisible = false;
             pane.XAxis.Title.Text = "Time (s)";
-            pane.YAxis.Title.Text = "Distance (m)";
-            pane.Legend.IsVisible = true;
-            pane.Legend.Position = LegendPos.TopCenter;
-            pane.Legend.FontSpec.Size = 9;
-            pane.Legend.FontSpec.FontColor = Color.White;
-            pane.Legend.Fill = new Fill(Color.FromArgb(56, 56, 60));
-            pane.Legend.Border.IsVisible = false;
+            pane.YAxis.Title.Text = "Distance magnitude (m)";
+            pane.Legend.IsVisible = false;
             pane.Margin.All = 12;
             pane.XAxis.MajorGrid.IsVisible = true;
             pane.YAxis.MajorGrid.IsVisible = true;
@@ -172,8 +155,8 @@ namespace MissionPlanner.Controls
             pane.XAxis.Scale.Max = DefaultWindowSeconds;
             pane.XAxis.Scale.MinAuto = false;
             pane.XAxis.Scale.MaxAuto = false;
-            pane.YAxis.Scale.Min = -1;
-            pane.YAxis.Scale.Max = 1;
+            pane.YAxis.Scale.Min = 0;
+            pane.YAxis.Scale.Max = 10;
             pane.YAxis.Scale.MinAuto = false;
             pane.YAxis.Scale.MaxAuto = false;
 
@@ -188,12 +171,50 @@ namespace MissionPlanner.Controls
             graph.ScrollDoneEvent += (s, scrollBar, oldState, newState) => Graph_ZoomOrPan(s, oldState, newState);
             graph.MouseDoubleClick += Graph_MouseDoubleClick;
 
-            AddSeries(pane, "X", _x, ColorX);
-            AddSeries(pane, "Y", _y, ColorY);
-            AddSeries(pane, "Z", _z, ColorZ);
-
             graph.AxisChange();
             return graph;
+        }
+
+        ObstacleTrack GetOrCreateTrack(ushort obstacleId)
+        {
+            if (_tracks.TryGetValue(obstacleId, out var existing))
+                return existing;
+
+            while (_tracks.Count >= MaxTrackedObstacles)
+                RemoveOldestTrack();
+
+            var color = TrackColors[_nextColorIndex % TrackColors.Length];
+            _nextColorIndex++;
+
+            var track = new ObstacleTrack
+            {
+                Id = obstacleId,
+                Color = color
+            };
+
+            track.Curve = AddSeries(_graph.GraphPane, track.Points, color);
+            _tracks[obstacleId] = track;
+            return track;
+        }
+
+        void RemoveOldestTrack()
+        {
+            if (_tracks.Count == 0)
+                return;
+
+            var oldest = _tracks.Values.OrderBy(t => t.LastSeenUtc).First();
+            RemoveTrack(oldest.Id);
+        }
+
+        void RemoveTrack(ushort id)
+        {
+            if (!_tracks.TryGetValue(id, out var track))
+                return;
+
+            if (track.Curve != null)
+                _graph.GraphPane.CurveList.Remove(track.Curve);
+
+            _tracks.Remove(id);
         }
 
         void Graph_ZoomOrPan(ZedGraphControl sender, ZoomState oldState, ZoomState newState)
@@ -201,8 +222,6 @@ namespace MissionPlanner.Controls
             _windowSeconds = GetVisibleDuration();
             _followLive = IsViewAlignedWithLive();
             _manualYScale = true;
-            SyncScrubFromView();
-            UpdateHeader();
         }
 
         void Graph_MouseDoubleClick(object sender, MouseEventArgs e)
@@ -217,57 +236,7 @@ namespace MissionPlanner.Controls
             _followLive = true;
             _manualYScale = false;
             _windowSeconds = DefaultWindowSeconds;
-            _suppressScrubSync = true;
-            _timeScrub.Value = ScrubMax;
-            _suppressScrubSync = false;
             ApplyScales();
-        }
-
-        void TimeScrub_Scroll(object sender, EventArgs e)
-        {
-            if (_suppressScrubSync || !_hasSample)
-                return;
-
-            _followLive = _timeScrub.Value >= ScrubMax - ScrubLiveSnapThreshold;
-            if (_followLive)
-            {
-                TrySnapToLiveFromScrub();
-                return;
-            }
-
-            var duration = GetVisibleDuration();
-            var maxStart = GetMaxViewStart(duration);
-            var tMin = ScrubToViewStart(_timeScrub.Value, maxStart);
-            var tMax = tMin + duration;
-            ScaleGraph(tMin, tMax, autoscaleY: !_manualYScale);
-            UpdateHeader();
-        }
-
-        void TrySnapToLiveFromScrub()
-        {
-            if (_timeScrub.Value >= ScrubMax - ScrubLiveSnapThreshold)
-                ResetLiveView();
-        }
-
-        void SyncScrubFromView()
-        {
-            if (_suppressScrubSync || _scrubDragging || !_hasSample || _graph?.GraphPane == null)
-                return;
-
-            _suppressScrubSync = true;
-            if (_followLive)
-            {
-                _timeScrub.Value = ScrubMax;
-            }
-            else
-            {
-                var duration = GetVisibleDuration();
-                var maxStart = GetMaxViewStart(duration);
-                var tMin = _graph.GraphPane.XAxis.Scale.Min;
-                _timeScrub.Value = ViewStartToScrub(tMin, maxStart);
-            }
-
-            _suppressScrubSync = false;
         }
 
         double GetVisibleDuration()
@@ -277,33 +246,6 @@ namespace MissionPlanner.Controls
 
             var span = _graph.GraphPane.XAxis.Scale.Max - _graph.GraphPane.XAxis.Scale.Min;
             return span > 1e-6 ? span : _windowSeconds;
-        }
-
-        static double GetMaxViewStart(double duration, double lastTime)
-        {
-            return Math.Max(0, lastTime - duration);
-        }
-
-        double GetMaxViewStart(double duration)
-        {
-            return GetMaxViewStart(duration, _lastPlotTimeSec);
-        }
-
-        static double ScrubToViewStart(int scrubValue, double maxStart)
-        {
-            if (maxStart <= 1e-9)
-                return 0;
-            var ratio = scrubValue / (double)ScrubMax;
-            return ratio * maxStart;
-        }
-
-        static int ViewStartToScrub(double viewStart, double maxStart)
-        {
-            if (maxStart <= 1e-9)
-                return ScrubMax;
-            var ratio = viewStart / maxStart;
-            ratio = Math.Max(0, Math.Min(1, ratio));
-            return (int)Math.Round(ratio * ScrubMax);
         }
 
         bool IsViewAlignedWithLive()
@@ -316,13 +258,13 @@ namespace MissionPlanner.Controls
             return Math.Abs(_lastPlotTimeSec - tMax) <= Math.Max(0.05, duration * 0.05);
         }
 
-        static void AddSeries(GraphPane pane, string label, RollingPointPairList points, Color lineColor)
+        static LineItem AddSeries(GraphPane pane, RollingPointPairList points, Color lineColor)
         {
-            var curve = pane.AddCurve(label, points, lineColor, SymbolType.Circle);
+            var curve = pane.AddCurve(string.Empty, points, lineColor, SymbolType.None);
             curve.Line.Width = 2.5f;
-            curve.Symbol.Size = 4f;
-            curve.Symbol.Fill = new Fill(lineColor);
-            curve.Symbol.Border.Color = lineColor;
+            curve.Label.IsVisible = false;
+            curve.Symbol.Size = 0f;
+            return curve;
         }
 
         static void StyleAxis(Axis axis)
@@ -345,32 +287,20 @@ namespace MissionPlanner.Controls
             pane.Fill = new Fill(Color.FromArgb(40, 40, 44));
             pane.Chart.Border.IsVisible = true;
             pane.Chart.Border.Color = Color.Gainsboro;
-            pane.Legend.IsVisible = true;
-            pane.Legend.FontSpec.FontColor = Color.White;
+            pane.Legend.IsVisible = false;
             StyleAxis(pane.XAxis);
             StyleAxis(pane.YAxis);
 
-            ApplySeriesStyle(pane, "X", ColorX);
-            ApplySeriesStyle(pane, "Y", ColorY);
-            ApplySeriesStyle(pane, "Z", ColorZ);
+            foreach (var track in _tracks.Values)
+            {
+                if (track.Curve == null)
+                    continue;
+                track.Curve.Color = track.Color;
+                track.Curve.Line.Color = track.Color;
+                track.Curve.Line.Width = 2.5f;
+            }
 
             SyncGraphLayout(graph);
-        }
-
-        static void ApplySeriesStyle(GraphPane pane, string label, Color lineColor)
-        {
-            foreach (var item in pane.CurveList)
-            {
-                if (item is LineItem line && line.Label.Text == label)
-                {
-                    line.Color = lineColor;
-                    line.Line.Color = lineColor;
-                    line.Line.Width = 2.5f;
-                    line.Symbol.Fill = new Fill(lineColor);
-                    line.Symbol.Border.Color = lineColor;
-                    return;
-                }
-            }
         }
 
         static void SyncGraphLayout(ZedGraphControl graph)
@@ -412,6 +342,17 @@ namespace MissionPlanner.Controls
             return true;
         }
 
+        static double DistanceMagnitude(MAVLink.mavlink_obstacle_distance_3d_t sample)
+        {
+            if (!IsPlottable(sample.x) && !IsPlottable(sample.y) && !IsPlottable(sample.z))
+                return double.NaN;
+
+            var x = IsPlottable(sample.x) ? sample.x : 0f;
+            var y = IsPlottable(sample.y) ? sample.y : 0f;
+            var z = IsPlottable(sample.z) ? sample.z : 0f;
+            return Math.Sqrt(x * x + y * y + z * z);
+        }
+
         void EnsureSubscribed()
         {
             if (MainV2.comPort == null)
@@ -448,14 +389,15 @@ namespace MissionPlanner.Controls
 
             while (_pending.TryDequeue(out var item))
             {
+                var mag = DistanceMagnitude(item.sample);
+                if (double.IsNaN(mag) || double.IsInfinity(mag))
+                    continue;
+
+                var track = GetOrCreateTrack(item.sample.obstacle_id);
+                track.Points.Add(item.t, mag);
+                track.LastSeenUtc = DateTime.UtcNow;
+
                 _lastPlotTimeSec = item.t;
-                if (IsPlottable(item.sample.x))
-                    _x.Add(item.t, item.sample.x);
-                if (IsPlottable(item.sample.y))
-                    _y.Add(item.t, item.sample.y);
-                if (IsPlottable(item.sample.z))
-                    _z.Add(item.t, item.sample.z);
-                _last = item.sample;
                 _hasSample = true;
             }
 
@@ -484,28 +426,11 @@ namespace MissionPlanner.Controls
                     tLast = tMin + duration;
 
                 ScaleGraph(tMin, tLast, autoscaleY: !_manualYScale);
-                SyncScrubFromView();
             }
-            else if (!_scrubDragging)
+            else
             {
                 _graph?.Refresh();
-                SyncScrubFromView();
             }
-
-            UpdateHeader();
-        }
-
-        void UpdateHeader()
-        {
-            string mode;
-            if (_followLive)
-                mode = string.Empty;
-            else
-                mode = "  [scrubbing history — drag slider right or click Live to catch up]";
-
-            _header.Text = string.Format(
-                "OBSTACLE_DISTANCE_3D  id {0}    X {1:0.00} m    Y {2:0.00} m    Z {3:0.00} m{4}",
-                _last.obstacle_id, _last.x, _last.y, _last.z, mode);
         }
 
         void ScaleGraph(double tMin, double tMax, bool autoscaleY)
@@ -532,8 +457,8 @@ namespace MissionPlanner.Controls
             }
             else if (autoscaleY)
             {
-                pane.YAxis.Scale.Min = -1;
-                pane.YAxis.Scale.Max = 1;
+                pane.YAxis.Scale.Min = 0;
+                pane.YAxis.Scale.Max = 10;
                 pane.YAxis.Scale.MinAuto = false;
                 pane.YAxis.Scale.MaxAuto = false;
             }
@@ -556,16 +481,15 @@ namespace MissionPlanner.Controls
             yMax = double.MinValue;
             var any = false;
 
-            AccumulateVisibleY(_x, tMin, tMax, ref yMin, ref yMax, ref any);
-            AccumulateVisibleY(_y, tMin, tMax, ref yMin, ref yMax, ref any);
-            AccumulateVisibleY(_z, tMin, tMax, ref yMin, ref yMax, ref any);
+            foreach (var track in _tracks.Values)
+                AccumulateVisibleY(track.Points, tMin, tMax, ref yMin, ref yMax, ref any);
 
             if (!any)
                 return false;
 
             var span = yMax - yMin;
             var pad = span > 1e-6 ? Math.Max(MinYPadding, span * YPaddingRatio) : 0.25;
-            yMin -= pad;
+            yMin = Math.Max(0, yMin - pad);
             yMax += pad;
             return true;
         }
@@ -594,7 +518,7 @@ namespace MissionPlanner.Controls
             base.OnVisibleChanged(e);
             if (Visible)
             {
-                SyncGraphLayout(_graph);
+                LayoutGraphNow();
                 ApplyScales();
             }
         }
