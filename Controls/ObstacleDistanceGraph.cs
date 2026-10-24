@@ -55,6 +55,9 @@ namespace MissionPlanner.Controls
             _plotOriginUtc = DateTime.UtcNow;
             _lastPlotTimeSec = 0;
             _trace.Clear();
+            var cs = MainV2.comPort?.MAV?.cs;
+            if (cs != null)
+                cs.obstacle_magnitude = 0;
             while (_pending.TryDequeue(out _))
             {
             }
@@ -335,6 +338,10 @@ namespace MissionPlanner.Controls
             var mag = MagnitudeMeters(sample);
             if (double.IsNaN(mag) || double.IsInfinity(mag))
                 return true;
+
+            var cs = MainV2.comPort?.MAV?.cs;
+            if (cs != null)
+                cs.obstacle_magnitude = mag;
 
             var t = (DateTime.UtcNow - _plotOriginUtc).TotalSeconds;
             _pending.Enqueue((mag, t));

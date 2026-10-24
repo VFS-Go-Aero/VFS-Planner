@@ -2013,6 +2013,14 @@ namespace MissionPlanner
         [DisplayFieldName("sonarvoltage.Field")]
         [DisplayText("Sonar Voltage (Volt)")][GroupText("Sensor")] public float sonarvoltage { get; set; }
 
+        /// <summary>
+        /// Latest OBSTACLE_DISTANCE_3D range, sqrt(x² + y² + z²), in meters.
+        /// Same value plotted on the obstacle graph.
+        /// </summary>
+        [DisplayText("Magnitude (m)")]
+        [GroupText("Sensor")]
+        public double obstacle_magnitude { get; set; }
+
         [DisplayText("RangeFinder1 (cm)")][GroupText("Sensor")] public uint rangefinder1 { get; set; }
         [DisplayText("RangeFinder2 (cm)")][GroupText("Sensor")] public uint rangefinder2 { get; set; }
         [DisplayText("RangeFinder3 (cm)")][GroupText("Sensor")] public uint rangefinder3 { get; set; }

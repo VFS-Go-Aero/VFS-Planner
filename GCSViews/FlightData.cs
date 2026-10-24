@@ -1822,6 +1822,7 @@ namespace MissionPlanner.GCSViews
 
                 // Load each dashboard item
                 // Format: row|col|source|label|color|format|scale|offset|isGauge|gaugeMin|gaugeMax
+                bool migratedEfficiencyTile = false;
                 for (int i = 0; i < 30; i++)
                 {
                     string itemData = Settings.Instance["dashboardItem" + i];
@@ -1836,6 +1837,17 @@ namespace MissionPlanner.GCSViews
                     int col = int.Parse(parts[1]);
                     string source = parts[2];
                     string label = parts[3];
+
+                    // Older layouts used the battery-efficiency tile for this cell.
+                    if (source == "battery_mahperkm")
+                    {
+                        source = "obstacle_magnitude";
+                        migratedEfficiencyTile = true;
+                        if (string.IsNullOrEmpty(label) ||
+                            label.IndexOf("efficiency", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            label.IndexOf("mah/km", StringComparison.OrdinalIgnoreCase) >= 0)
+                            label = string.Empty;
+                    }
                     string color = parts[4];
                     string format = parts[5];
                     double scale = double.Parse(parts[6]);
@@ -1903,6 +1915,9 @@ namespace MissionPlanner.GCSViews
                         BindQuickView(qv);
                     }
                 }
+
+                if (migratedEfficiencyTile)
+                    SaveQuickViewArrangement();
             }
             finally
             {
