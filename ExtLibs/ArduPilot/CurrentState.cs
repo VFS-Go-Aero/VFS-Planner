@@ -2017,7 +2017,7 @@ namespace MissionPlanner
         /// Latest OBSTACLE_DISTANCE_3D range, sqrt(x² + y² + z²), in meters.
         /// Same value plotted on the obstacle graph.
         /// </summary>
-        [DisplayText("Magnitude (m)")]
+        [DisplayText("Obstacle Distance (m)")]
         [GroupText("Sensor")]
         public double obstacle_magnitude { get; set; }
 

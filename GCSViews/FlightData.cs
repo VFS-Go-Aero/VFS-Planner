@@ -1839,14 +1839,19 @@ namespace MissionPlanner.GCSViews
                     string label = parts[3];
 
                     // Older layouts used the battery-efficiency tile for this cell.
-                    if (source == "battery_mahperkm")
+                    if (source == "battery_mahperkm" || source == "obstacle_magnitude")
                     {
+                        if (source == "battery_mahperkm")
+                            migratedEfficiencyTile = true;
                         source = "obstacle_magnitude";
-                        migratedEfficiencyTile = true;
                         if (string.IsNullOrEmpty(label) ||
                             label.IndexOf("efficiency", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            label.IndexOf("mah/km", StringComparison.OrdinalIgnoreCase) >= 0)
-                            label = string.Empty;
+                            label.IndexOf("mah/km", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            label.IndexOf("magnitude", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            label = "Obstacle Distance";
+                            migratedEfficiencyTile = true;
+                        }
                     }
                     string color = parts[4];
                     string format = parts[5];

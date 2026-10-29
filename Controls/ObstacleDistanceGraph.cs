@@ -9,15 +9,17 @@ namespace MissionPlanner.Controls
 {
     /// <summary>
     /// Each OBSTACLE_DISTANCE_3D message adds one point: Y = magnitude (m), X = time (s).
-    /// X axis scrolls a 5 s window; Y autoscales from the visible data.
+    /// Live mode scrolls a fixed 5 s window; drag horizontally to scrub time, then Center to resume.
     /// </summary>
     public class ObstacleDistanceGraph : UserControl
     {
         const int CompIdAny = 255;
         const double TimeWindowSeconds = 5;
+        const double HistorySeconds = 120;
         const int MaxPoints = 5000;
 
         readonly ZedGraphControl _graph;
+        readonly Button _btnCenter;
         readonly PointPairList _trace = new PointPairList();
         LineItem _traceCurve;
         readonly ConcurrentQueue<(double magnitude, double timeSec)> _pending =
@@ -28,6 +30,7 @@ namespace MissionPlanner.Controls
         byte _subscribedSysid;
         DateTime _plotOriginUtc = DateTime.UtcNow;
         double _lastPlotTimeSec;
+        bool _followLive = true;
 
         public ObstacleDistanceGraph()
         {
@@ -38,15 +41,42 @@ namespace MissionPlanner.Controls
             _graph.MinimumSize = new Size(120, 80);
             Controls.Add(_graph);
 
+            _btnCenter = new Button
+            {
+                Text = "Center",
+                Size = new Size(72, 26),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(56, 56, 60),
+                ForeColor = Color.White,
+                Visible = false,
+                TabStop = false
+            };
+            _btnCenter.FlatAppearance.BorderColor = Color.FromArgb(120, 220, 255);
+            _btnCenter.Click += (s, e) => RecenterLive();
+            Controls.Add(_btnCenter);
+            _btnCenter.BringToFront();
+
             _timer = new Timer { Interval = 50 };
             _timer.Tick += Timer_Tick;
 
-            HandleCreated += (s, e) => SyncGraphLayout(_graph);
-            Resize += (s, e) => SyncGraphLayout(_graph);
+            HandleCreated += (s, e) =>
+            {
+                PositionCenterButton();
+                SyncGraphLayout();
+            };
+            Resize += (s, e) =>
+            {
+                PositionCenterButton();
+                SyncGraphLayout();
+            };
             VisibleChanged += (s, e) =>
             {
                 if (Visible)
-                    SyncGraphLayout(_graph);
+                {
+                    PositionCenterButton();
+                    SyncGraphLayout();
+                }
             };
         }
 
@@ -54,6 +84,8 @@ namespace MissionPlanner.Controls
         {
             _plotOriginUtc = DateTime.UtcNow;
             _lastPlotTimeSec = 0;
+            _followLive = true;
+            UpdateCenterButton();
             _trace.Clear();
             var cs = MainV2.comPort?.MAV?.cs;
             if (cs != null)
@@ -67,11 +99,11 @@ namespace MissionPlanner.Controls
             StyleGraph(_graph);
             ApplyScales();
             _timer.Start();
-            SyncGraphLayout(_graph);
+            SyncGraphLayout();
             if (IsHandleCreated)
                 BeginInvoke(new Action(() =>
                 {
-                    SyncGraphLayout(_graph);
+                    SyncGraphLayout();
                     ApplyScales();
                 }));
         }
@@ -85,6 +117,38 @@ namespace MissionPlanner.Controls
         {
             ApplyScales();
             _graph?.Refresh();
+        }
+
+        void RecenterLive()
+        {
+            _followLive = true;
+            UpdateCenterButton();
+            ApplyScales();
+            _graph?.Refresh();
+        }
+
+        void BeginScrub()
+        {
+            if (!_followLive)
+                return;
+
+            _followLive = false;
+            UpdateCenterButton();
+        }
+
+        void UpdateCenterButton()
+        {
+            _btnCenter.Visible = !_followLive;
+            if (_btnCenter.Visible)
+                _btnCenter.BringToFront();
+        }
+
+        void PositionCenterButton()
+        {
+            const int margin = 10;
+            _btnCenter.Location = new Point(
+                Math.Max(margin, ClientSize.Width - _btnCenter.Width - margin),
+                margin);
         }
 
         ZedGraphControl CreateGraph()
@@ -118,16 +182,24 @@ namespace MissionPlanner.Controls
             pane.XAxis.Scale.MaxAuto = false;
             SetAxisAutoscale(pane.YAxis);
 
-            graph.IsEnableHZoom = true;
-            graph.IsEnableVZoom = true;
-            graph.IsEnableWheelZoom = true;
+            // Time scrub only — no zoom and no vertical pan. Left-drag pans time.
+            graph.IsEnableHZoom = false;
+            graph.IsEnableVZoom = false;
+            graph.IsEnableWheelZoom = false;
             graph.IsEnableHPan = true;
-            graph.IsEnableVPan = true;
-            graph.IsShowContextMenu = true;
+            graph.IsEnableVPan = false;
+            graph.PanButtons = MouseButtons.Left;
+            graph.PanModifierKeys = Keys.None;
+            graph.PanButtons2 = MouseButtons.Middle;
+            graph.PanModifierKeys2 = Keys.None;
+            graph.IsShowContextMenu = false;
+            graph.ZoomEvent += Graph_ZoomEvent;
+            // Pause live follow as soon as a scrub drag starts (ZoomEvent only fires on release).
+            graph.MouseDownEvent += Graph_MouseDownEvent;
             graph.MouseDoubleClick += (s, e) =>
             {
                 if (e.Button == MouseButtons.Left)
-                    ApplyScales();
+                    RecenterLive();
             };
 
             _traceCurve = pane.AddCurve(string.Empty, _trace, Color.FromArgb(120, 220, 255), SymbolType.Circle);
@@ -143,6 +215,29 @@ namespace MissionPlanner.Controls
             return graph;
         }
 
+        bool Graph_MouseDownEvent(ZedGraphControl sender, MouseEventArgs e)
+        {
+            var isPan =
+                (e.Button == sender.PanButtons && Control.ModifierKeys == sender.PanModifierKeys) ||
+                (e.Button == sender.PanButtons2 && Control.ModifierKeys == sender.PanModifierKeys2);
+            if (isPan && sender.MasterPane.FindChartRect(e.Location) != null)
+                BeginScrub();
+            return false;
+        }
+
+        void Graph_ZoomEvent(ZedGraphControl sender, ZoomState oldState, ZoomState newState)
+        {
+            // Pan is reported through ZoomEvent; ignore other state types.
+            if (newState == null || newState.Type != ZoomState.StateType.Pan)
+                return;
+
+            BeginScrub();
+            SetAxisAutoscale(sender.GraphPane.YAxis);
+            sender.AxisChange();
+            LockFixedTimeWindow(sender.GraphPane);
+            sender.Invalidate(true);
+        }
+
         void StyleGraph(ZedGraphControl graph)
         {
             if (graph?.GraphPane == null)
@@ -155,7 +250,7 @@ namespace MissionPlanner.Controls
             StyleAxis(pane.XAxis);
             StyleAxis(pane.YAxis);
             ApplyScales();
-            SyncGraphLayout(graph);
+            SyncGraphLayout();
         }
 
         static void StyleAxis(Axis axis)
@@ -174,16 +269,15 @@ namespace MissionPlanner.Controls
             axis.Scale.MaxAuto = true;
         }
 
-        static void SyncGraphLayout(ZedGraphControl graph)
+        void SyncGraphLayout()
         {
-            if (graph == null || graph.IsDisposed || graph.Width < 10 || graph.Height < 10)
+            if (_graph == null || _graph.IsDisposed || _graph.Width < 10 || _graph.Height < 10)
                 return;
 
-            using (var g = graph.CreateGraphics())
-                graph.MasterPane.ReSize(g, new RectangleF(0, 0, graph.Width, graph.Height));
+            using (var g = _graph.CreateGraphics())
+                _graph.MasterPane.ReSize(g, new RectangleF(0, 0, _graph.Width, _graph.Height));
 
-            graph.AxisChange();
-            graph.Invalidate(true);
+            ApplyScales();
         }
 
         void ApplyScales()
@@ -192,18 +286,56 @@ namespace MissionPlanner.Controls
                 return;
 
             var pane = _graph.GraphPane;
-            ApplyLiveTimeWindow(pane);
             SetAxisAutoscale(pane.YAxis);
-            pane.AxisChange();
+
+            // Same pattern as FlightData tuning: set X, AxisChange on the control, then re-lock X
+            // because AxisChange / Y autoscale can rewrite the visible range.
+            if (_followLive)
+                ApplyLiveTimeWindow(pane);
+
+            _graph.AxisChange();
+
+            if (_followLive)
+                ApplyLiveTimeWindow(pane);
+            else
+                LockFixedTimeWindow(pane);
+
             _graph.Invalidate(true);
         }
 
+        /// <summary>
+        /// Rolling 5 s X window that follows wall-clock time so the plot scrolls continuously.
+        /// </summary>
         void ApplyLiveTimeWindow(GraphPane pane)
         {
-            var tLast = Math.Max(_lastPlotTimeSec, TimeWindowSeconds * 0.1);
-            var tMin = Math.Max(0, tLast - TimeWindowSeconds);
+            var nowSec = (DateTime.UtcNow - _plotOriginUtc).TotalSeconds;
+            if (_lastPlotTimeSec > nowSec)
+                nowSec = _lastPlotTimeSec;
+
+            // Keep a small lead so the newest point is not glued to the right edge.
+            var major = pane.XAxis.Scale.MajorStep;
+            if (double.IsNaN(major) || major <= 0)
+                major = 1.0;
+
+            var tMax = Math.Max(TimeWindowSeconds, nowSec + major);
+            var tMin = tMax - TimeWindowSeconds;
+            if (tMin < 0)
+            {
+                tMin = 0;
+                tMax = TimeWindowSeconds;
+            }
+
             pane.XAxis.Scale.Min = tMin;
-            pane.XAxis.Scale.Max = Math.Max(tMin + TimeWindowSeconds, tLast);
+            pane.XAxis.Scale.Max = tMax;
+            pane.XAxis.Scale.MinAuto = false;
+            pane.XAxis.Scale.MaxAuto = false;
+        }
+
+        void LockFixedTimeWindow(GraphPane pane)
+        {
+            var min = pane.XAxis.Scale.Min;
+            pane.XAxis.Scale.Min = min;
+            pane.XAxis.Scale.Max = min + TimeWindowSeconds;
             pane.XAxis.Scale.MinAuto = false;
             pane.XAxis.Scale.MaxAuto = false;
         }
@@ -222,11 +354,25 @@ namespace MissionPlanner.Controls
             if (!Visible)
                 return;
 
-            if (changed || _trace.Count > 0)
+            // Always refresh while following live so the 5 s window scrolls with wall clock,
+            // even between sparse OBSTACLE_DISTANCE_3D messages.
+            if (_followLive)
             {
-                TrimTraceToWindow();
+                if (changed)
+                    TrimTraceHistory();
                 ApplyScales();
                 _graph?.Refresh();
+                return;
+            }
+
+            if (changed || _trace.Count > 0)
+            {
+                TrimTraceHistory();
+                // Still refresh so new points appear if they fall in the scrubbed window.
+                SetAxisAutoscale(_graph.GraphPane.YAxis);
+                _graph.AxisChange();
+                LockFixedTimeWindow(_graph.GraphPane);
+                _graph.Refresh();
             }
         }
 
@@ -251,12 +397,12 @@ namespace MissionPlanner.Controls
             return true;
         }
 
-        void TrimTraceToWindow()
+        void TrimTraceHistory()
         {
             if (_trace.Count == 0)
                 return;
 
-            var tMin = Math.Max(0, _lastPlotTimeSec - TimeWindowSeconds - 1);
+            var tMin = Math.Max(0, _lastPlotTimeSec - HistorySeconds);
             while (_trace.Count > 1 && _trace[0].X < tMin)
                 _trace.RemoveAt(0);
         }
