@@ -8,8 +8,9 @@ using ZedGraph;
 namespace MissionPlanner.Controls
 {
     /// <summary>
-    /// Each OBSTACLE_DISTANCE_3D message adds one point: Y = magnitude (m), X = time (s).
-    /// Live mode scrolls a fixed 5 s window; drag horizontally to scrub time, then Center to resume.
+    /// OBSTACLE_DISTANCE_3D messages that share time_boot_ms form one frame.
+    /// Each frame plots two magnitude points (closest and farthest). Live mode scrolls
+    /// a fixed 5 s window; drag horizontally to scrub time, then Center to resume.
     /// </summary>
     public class ObstacleDistanceGraph : UserControl
     {
@@ -17,13 +18,19 @@ namespace MissionPlanner.Controls
         const double TimeWindowSeconds = 5;
         const double HistorySeconds = 120;
         const int MaxPoints = 5000;
+        /// <summary>
+        /// Flush a partially received frame once no new samples arrive for this long.
+        /// </summary>
+        const double FrameIdleFlushSeconds = 0.08;
 
         readonly ZedGraphControl _graph;
         readonly Button _btnCenter;
-        readonly PointPairList _trace = new PointPairList();
-        LineItem _traceCurve;
-        readonly ConcurrentQueue<(double magnitude, double timeSec)> _pending =
-            new ConcurrentQueue<(double, double)>();
+        readonly PointPairList _closestTrace = new PointPairList();
+        readonly PointPairList _farthestTrace = new PointPairList();
+        LineItem _closestCurve;
+        LineItem _farthestCurve;
+        readonly ConcurrentQueue<(double magnitude, uint bootMs, double timeSec)> _pending =
+            new ConcurrentQueue<(double, uint, double)>();
         readonly Timer _timer;
 
         int _subscription;
@@ -31,6 +38,13 @@ namespace MissionPlanner.Controls
         DateTime _plotOriginUtc = DateTime.UtcNow;
         double _lastPlotTimeSec;
         bool _followLive = true;
+
+        bool _frameOpen;
+        uint _frameBootMs;
+        double _frameClosest;
+        double _frameFarthest;
+        double _frameTimeSec;
+        double _frameLastSampleSec;
 
         public ObstacleDistanceGraph()
         {
@@ -86,7 +100,9 @@ namespace MissionPlanner.Controls
             _lastPlotTimeSec = 0;
             _followLive = true;
             UpdateCenterButton();
-            _trace.Clear();
+            _closestTrace.Clear();
+            _farthestTrace.Clear();
+            ResetFrame();
             var cs = MainV2.comPort?.MAV?.cs;
             if (cs != null)
                 cs.obstacle_magnitude = 0;
@@ -163,7 +179,11 @@ namespace MissionPlanner.Controls
             pane.Title.IsVisible = false;
             pane.XAxis.Title.Text = "Time (s)";
             pane.YAxis.Title.Text = "Magnitude (m)";
-            pane.Legend.IsVisible = false;
+            pane.Legend.IsVisible = true;
+            pane.Legend.FontSpec.Size = 10f;
+            pane.Legend.FontSpec.FontColor = Color.White;
+            pane.Legend.Fill = new Fill(Color.FromArgb(48, 48, 52));
+            pane.Legend.Border.Color = Color.FromArgb(90, 90, 95);
             pane.Margin.All = 14;
             pane.XAxis.MajorGrid.IsVisible = true;
             pane.YAxis.MajorGrid.IsVisible = true;
@@ -202,17 +222,26 @@ namespace MissionPlanner.Controls
                     RecenterLive();
             };
 
-            _traceCurve = pane.AddCurve(string.Empty, _trace, Color.FromArgb(120, 220, 255), SymbolType.Circle);
-            _traceCurve.Line.Width = 2f;
-            _traceCurve.Line.IsVisible = true;
-            _traceCurve.Line.IsSmooth = false;
-            _traceCurve.Label.IsVisible = false;
-            _traceCurve.Symbol.Size = 4f;
-            _traceCurve.Symbol.Fill = new Fill(Color.FromArgb(120, 220, 255));
-            _traceCurve.Symbol.Border.Color = Color.White;
+            var closestColor = Color.FromArgb(120, 220, 255);
+            _closestCurve = pane.AddCurve("Closest", _closestTrace, closestColor, SymbolType.Circle);
+            StylePointCurve(_closestCurve, closestColor);
+
+            var farthestColor = Color.FromArgb(255, 170, 90);
+            _farthestCurve = pane.AddCurve("Farthest", _farthestTrace, farthestColor, SymbolType.Diamond);
+            StylePointCurve(_farthestCurve, farthestColor);
 
             graph.AxisChange();
             return graph;
+        }
+
+        static void StylePointCurve(LineItem curve, Color color)
+        {
+            // Markers only — no connecting line between timestamps.
+            curve.Line.IsVisible = false;
+            curve.Label.IsVisible = true;
+            curve.Symbol.Size = 6f;
+            curve.Symbol.Fill = new Fill(color);
+            curve.Symbol.Border.Color = Color.White;
         }
 
         bool Graph_MouseDownEvent(ZedGraphControl sender, MouseEventArgs e)
@@ -246,7 +275,10 @@ namespace MissionPlanner.Controls
             var pane = graph.GraphPane;
             pane.Chart.Fill = new Fill(Color.FromArgb(56, 56, 60));
             pane.Fill = new Fill(Color.FromArgb(40, 40, 44));
-            pane.Legend.IsVisible = false;
+            pane.Legend.IsVisible = true;
+            pane.Legend.FontSpec.FontColor = Color.White;
+            pane.Legend.Fill = new Fill(Color.FromArgb(48, 48, 52));
+            pane.Legend.Border.Color = Color.FromArgb(90, 90, 95);
             StyleAxis(pane.XAxis);
             StyleAxis(pane.YAxis);
             ApplyScales();
@@ -347,9 +379,13 @@ namespace MissionPlanner.Controls
             var changed = false;
             while (_pending.TryDequeue(out var item))
             {
-                if (AppendPoint(item.magnitude, item.timeSec))
+                if (IngestSample(item.magnitude, item.bootMs, item.timeSec))
                     changed = true;
             }
+
+            var nowSec = (DateTime.UtcNow - _plotOriginUtc).TotalSeconds;
+            if (TryFlushIdleFrame(nowSec))
+                changed = true;
 
             if (!Visible)
                 return;
@@ -365,7 +401,7 @@ namespace MissionPlanner.Controls
                 return;
             }
 
-            if (changed || _trace.Count > 0)
+            if (changed || _closestTrace.Count > 0 || _farthestTrace.Count > 0)
             {
                 TrimTraceHistory();
                 // Still refresh so new points appear if they fall in the scrubbed window.
@@ -376,35 +412,109 @@ namespace MissionPlanner.Controls
             }
         }
 
-        bool AppendPoint(double mag, double timeSec)
+        bool IngestSample(double mag, uint bootMs, double timeSec)
         {
             if (double.IsNaN(mag) || double.IsInfinity(mag))
                 return false;
 
-            if (_trace.Count > 0)
+            if (!_frameOpen)
             {
-                var last = _trace[_trace.Count - 1];
+                BeginFrame(bootMs, mag, timeSec);
+                return false;
+            }
+
+            if (bootMs != _frameBootMs)
+            {
+                var flushed = FlushFrame();
+                BeginFrame(bootMs, mag, timeSec);
+                return flushed;
+            }
+
+            if (mag < _frameClosest)
+                _frameClosest = mag;
+            if (mag > _frameFarthest)
+                _frameFarthest = mag;
+            _frameLastSampleSec = timeSec;
+            return false;
+        }
+
+        void BeginFrame(uint bootMs, double mag, double timeSec)
+        {
+            _frameOpen = true;
+            _frameBootMs = bootMs;
+            _frameClosest = mag;
+            _frameFarthest = mag;
+            _frameTimeSec = timeSec;
+            _frameLastSampleSec = timeSec;
+        }
+
+        bool TryFlushIdleFrame(double nowSec)
+        {
+            if (!_frameOpen)
+                return false;
+
+            if (nowSec - _frameLastSampleSec < FrameIdleFlushSeconds)
+                return false;
+
+            return FlushFrame();
+        }
+
+        bool FlushFrame()
+        {
+            if (!_frameOpen)
+                return false;
+
+            var addedClosest = AppendPoint(_closestTrace, _frameClosest, _frameTimeSec);
+            var addedFarthest = AppendPoint(_farthestTrace, _frameFarthest, _frameTimeSec);
+            _lastPlotTimeSec = _frameTimeSec;
+            ResetFrame();
+            return addedClosest || addedFarthest;
+        }
+
+        void ResetFrame()
+        {
+            _frameOpen = false;
+            _frameBootMs = 0;
+            _frameClosest = 0;
+            _frameFarthest = 0;
+            _frameTimeSec = 0;
+            _frameLastSampleSec = 0;
+        }
+
+        bool AppendPoint(PointPairList trace, double mag, double timeSec)
+        {
+            if (double.IsNaN(mag) || double.IsInfinity(mag))
+                return false;
+
+            if (trace.Count > 0)
+            {
+                var last = trace[trace.Count - 1];
                 if (Math.Abs(last.X - timeSec) < 1e-9 && Math.Abs(last.Y - mag) < 1e-9)
                     return false;
             }
 
-            _trace.Add(timeSec, mag);
-            _lastPlotTimeSec = timeSec;
+            trace.Add(timeSec, mag);
 
-            while (_trace.Count > MaxPoints)
-                _trace.RemoveAt(0);
+            while (trace.Count > MaxPoints)
+                trace.RemoveAt(0);
 
             return true;
         }
 
         void TrimTraceHistory()
         {
-            if (_trace.Count == 0)
+            var tMin = Math.Max(0, _lastPlotTimeSec - HistorySeconds);
+            TrimTrace(_closestTrace, tMin);
+            TrimTrace(_farthestTrace, tMin);
+        }
+
+        static void TrimTrace(PointPairList trace, double tMin)
+        {
+            if (trace.Count == 0)
                 return;
 
-            var tMin = Math.Max(0, _lastPlotTimeSec - HistorySeconds);
-            while (_trace.Count > 1 && _trace[0].X < tMin)
-                _trace.RemoveAt(0);
+            while (trace.Count > 1 && trace[0].X < tMin)
+                trace.RemoveAt(0);
         }
 
         /// <summary>
@@ -485,12 +595,13 @@ namespace MissionPlanner.Controls
             if (double.IsNaN(mag) || double.IsInfinity(mag))
                 return true;
 
+            // Dashboard / quick-view still shows latest magnitude.
             var cs = MainV2.comPort?.MAV?.cs;
             if (cs != null)
                 cs.obstacle_magnitude = mag;
 
             var t = (DateTime.UtcNow - _plotOriginUtc).TotalSeconds;
-            _pending.Enqueue((mag, t));
+            _pending.Enqueue((mag, sample.time_boot_ms, t));
             return true;
         }
 
