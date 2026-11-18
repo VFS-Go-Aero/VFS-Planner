@@ -1,0 +1,211 @@
+[33mcommit d124352b2286ab44a3a6c3fca33035cc00b82b75[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmaster[m[33m)[m
+Merge: fbdfb9bf7 045c19013
+Author: OwenLee-1 <c4yrnj4ps5@privaterelay.appleid.com>
+Date:   Fri Sep 18 20:15:29 2026 -0400
+
+    Merge pull request #4 from OwenLee-1/fix/build-preflight-summary-panel
+    
+    Fix build: PreflightSummaryPanel and RainViewer radar
+
+[33mcommit 045c1901392faf0b9576b0b3eb774dcb5851b454[m[33m ([m[1;31morigin/fix/build-preflight-summary-panel[m[33m)[m
+Merge: 05532046b f223d8a9d
+Author: OwenLee-1 <c4yrnj4ps5@privaterelay.appleid.com>
+Date:   Fri Sep 18 20:15:18 2026 -0400
+
+    Merge pull request #3 from OwenLee-1/feat/local-error-reports
+    
+    Save exception reports locally with optional remote URL
+
+[33mcommit fbdfb9bf707d65ef4d3119b604281174bfc1690c[m
+Merge: 535fde42d 4250c5a9d
+Author: OwenLee-1 <c4yrnj4ps5@privaterelay.appleid.com>
+Date:   Fri Sep 18 20:15:08 2026 -0400
+
+    Merge pull request #5 from OwenLee-1/fix/map-overlay-zoom
+    
+    Fix map overlays when zoomed in
+
+[33mcommit 4250c5a9d4c0da8b53665317ab52beb3ec88fdf0[m
+Author: OwenLee-1 <c4yrnj4ps5@privaterelay.appleid.com>
+Date:   Fri Sep 18 20:12:55 2026 -0400
+
+    Fix map overlays when zoomed in.
+    
+    Refetch restriction layers on significant zoom-in and pan-outside-cache, scale WFS maxFeatures by viewport size, force overlay geometry refresh after loads, and overzoom RainViewer radar tiles past zoom 12.
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+[33mcommit f223d8a9d5715a27eba7f7d5332c84133a5f7eda[m[33m ([m[1;31morigin/feat/local-error-reports[m[33m)[m
+Author: OwenLee-1 <c4yrnj4ps5@privaterelay.appleid.com>
+Date:   Fri Sep 18 19:39:02 2026 -0400
+
+    Save exception reports locally with optional remote submit URL.
+    
+    Write structured crash reports under Documents/Mission Planner/ErrorReports, replace legacy Oborne mail endpoint by default, and gate Google Analytics exception tracking behind app.config.
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+[33mcommit 05532046b317fffbceee92b16635e13c1d61c27d[m
+Author: OwenLee-1 <c4yrnj4ps5@privaterelay.appleid.com>
+Date:   Fri Sep 18 19:37:22 2026 -0400
+
+    Fix build errors for preflight summary and radar provider.
+    
+    Move PreflightSummaryPanel into the main Controls project so CheckListControl resolves, fix RainViewer DateTime assignment for net472, and qualify FlightData references in MainV2.
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+[33mcommit 535fde42d26b873b7be622e0205e7a639013f296[m
+Author: Owen Lee <owenleemail@gmail.com>
+Date:   Fri Sep 18 12:29:03 2026 -0400
+
+    Added Preflight, Updated Map UI with NOTAMs, VFRs, TFRs, etc. Updated readme and more thorough checklist and arming blockers
+
+[33mcommit 25e2abb755b95005172da4d56687b26991f7bba7[m
+Author: OwenLee-1 <c4yrnj4ps5@privaterelay.appleid.com>
+Date:   Wed Sep 16 23:34:36 2026 -0400
+
+    Fixing preflight checklist items
+
+[33mcommit 5cf5249a942f8e9815e815738dbfbefe512da66b[m
+Author: Owen Lee <owenleemail@gmail.com>
+Date:   Sun Sep 13 00:06:40 2026 -0400
+
+    WIP: save current work
+
+[33mcommit 6f3d31411a27f49603f8cc048bc62a30d1518f3b[m
+Author: OwenLee-1 <c4yrnj4ps5@privaterelay.appleid.com>
+Date:   Sat Sep 12 23:54:34 2026 -0400
+
+    Fixed build for .exe build setup
+
+[33mcommit 64d29a958faa7e8a5129ed6bb6a61e93488d6aa9[m
+Author: Owen Lee <owenleemail@gmail.com>
+Date:   Sat Sep 12 22:56:42 2026 -0400
+
+    Graphics Changes, QoL Preflight Adjustments
+
+[33mcommit 3277dd573fc6af659f708592ce2f31c4c20f9733[m
+Author: Owen Lee <owenleemail@gmail.com>
+Date:   Sat Sep 12 12:14:15 2026 -0400
+
+    First Pass at updating the Software to fit the needs for VFS Flight Operations
+
+[33mcommit 26d0836e3854c2166dc0cbcacbbbb9813b890b2d[m
+Author: Mohammad Adib <m.a.adib96@gmail.com>
+Date:   Fri May 29 12:53:25 2026 -0700
+
+    setGuidedModeWP callers: set frame explicitly to GLOBAL_RELATIVE_ALT
+    
+    Upstream commit 3d92c21f5 (PR #3718) changed setGuidedModeWP on copter
+    to honor Locationwp.frame instead of forcing GLOBAL_RELATIVE_ALT_INT.
+    Callers that build Locationwp without setting .frame default to 0
+    (MAV_FRAME.GLOBAL = AMSL), which silently changes guided-mode altitude
+    semantics on copter.
+    
+    Set frame explicitly on the affected call sites so behavior matches
+    the previous pre-fix expectation regardless of MAVLinkInterface logic.
+
+[33mcommit 9e67c7e3629c8593a62d736d6a78d7161dca37da[m
+Merge: 88f8c6cb2 4be3d232d
+Author: Mohammad Adib <m.a.adib96@gmail.com>
+Date:   Fri May 29 12:31:53 2026 -0700
+
+    Merge remote-tracking branch 'upstream/master'
+    
+    # Conflicts:
+    #       GCSViews/ConfigurationView/ConfigArducopter.Designer.cs
+
+[33mcommit 4be3d232dcf36000390eaf761adb9b9887a857e5[m
+Author: Artur Khylskyi <arthur.patriot@gmail.com>
+Date:   Mon Apr 27 18:28:50 2026 +0300
+
+    Replace multiple instances of Milliseconds with TotalMilliseconds for accurate time calculations
+
+[33mcommit 60bedb50ec5ced40450df20ddd61320b3ff1d101[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Tue Apr 28 14:04:55 2026 +0200
+
+    Update case on PramaChange47 class name
+
+[33mcommit 311ab82dda1dd1d4faccf39164ee70d8118c6819[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Tue Apr 28 13:59:57 2026 +0200
+
+    Removed q_pilot params as per request from Randy, they were incorrectly tagged in the release notes.
+
+[33mcommit 0ebde95f66add261d4e35a119d0dcf82b4d73e82[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Thu Mar 19 01:10:32 2026 +0100
+
+    DroneGroup: RTL_ALT_M and WP_ACC
+
+[33mcommit 2498be38ecadd38c709908e22bf6660c53e80649[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Thu Mar 19 01:09:41 2026 +0100
+
+    FaceMap: WP_SPD
+
+[33mcommit 8cfaea1ec7191c9b8c5ba3779a97f59409b691ba[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Thu Mar 19 01:09:13 2026 +0100
+
+    GridUI: WP_SPD
+
+[33mcommit 08e16a658b20b0f2a7d1fc999f849576c5ec4676[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Thu Mar 19 01:08:30 2026 +0100
+
+    FlightPlanner: WP_ACC and WP_SPD for spline calc and bug in WP_RADIUS
+
+[33mcommit feb7f8e2ef067ce408e7283cdfb930eb1630bf72[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Thu Mar 19 01:06:00 2026 +0100
+
+    ConfigInitialParam: ATC_ACC_* and help text for PSC_D_*
+
+[33mcommit 8c2eb96674ecf3c5d9a7e742ee9dfe4a115f20c6[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Thu Mar 19 00:59:52 2026 +0100
+
+    ConfigAC_Fence : Support both RTL_ALT and RTL_ALT_M for RTL altitude
+
+[33mcommit 58bccd29fdf3947295af0e6ec92d2cfd7f2dc890[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Thu Mar 19 00:21:39 2026 +0100
+
+    add changed WP_RADIUS_M to FlightPlanner
+
+[33mcommit de7bdac9c149cb948b99ebd503f31f6abf200c22[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Thu Mar 19 00:21:15 2026 +0100
+
+    Update parameters in ExtendedCopter Config, also add a warning based on the change description
+
+[33mcommit fcfd7eca13fd66f9f5522d26f96c399c104938ca[m
+Author: Andras Schaffer <eosbandi@gmail.com>
+Date:   Thu Mar 19 00:20:25 2026 +0100
+
+    Add param change list with descriptions
+
+[33mcommit 88f8c6cb2177d2048571d0d9b59e108a147f967f[m
+Author: Mohammad Adib <m.a.adib96@gmail.com>
+Date:   Wed May 27 16:31:11 2026 -0700
+
+    Dashboard defaults: use integer format for distance/heading/rssi/etc.
+    
+    RX RSSI, Dist to WP, Dist to Home, Dist Travelled, Heading, Altitude,
+    Bat used (mah), and Bat Watts now default to '0' format instead of '0.00'.
+    Adds an optional 5th 'format' column to DefaultQuickViewSettings.csv so
+    per-field number formats can be configured alongside color/label/scale.
+
+[33mcommit 30cfa4d80ba601bce2c434facc2885cc9cd45667[m
+Author: Mohammad Adib <m.a.adib96@gmail.com>
+Date:   Wed May 27 16:22:00 2026 -0700
+
+    QuickView: add Red/Yellow/Green color-coding by value threshold
+    
+    Adds an optional 'Color-code' mode to dashboard quick items, mirroring the
+    existing Gauge pattern. Each item can define threshold values for Red,
+    Yellow, and Green; the displayed color is the one whose threshold is the
+    highest still <= the curre

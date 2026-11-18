@@ -20,8 +20,9 @@ namespace MissionPlanner.Controls
         const int MaxPoints = 5000;
         /// <summary>
         /// Flush a partially received frame once no new samples arrive for this long.
+        /// Late samples for the same time_boot_ms still update the last plotted points.
         /// </summary>
-        const double FrameIdleFlushSeconds = 0.08;
+        const double FrameIdleFlushSeconds = 0.15;
 
         readonly ZedGraphControl _graph;
         readonly Button _btnCenter;
@@ -45,6 +46,8 @@ namespace MissionPlanner.Controls
         double _frameFarthest;
         double _frameTimeSec;
         double _frameLastSampleSec;
+        bool _hasFlushedFrame;
+        uint _lastFlushedBootMs;
 
         public ObstacleDistanceGraph()
         {
@@ -103,6 +106,8 @@ namespace MissionPlanner.Controls
             _closestTrace.Clear();
             _farthestTrace.Clear();
             ResetFrame();
+            _hasFlushedFrame = false;
+            _lastFlushedBootMs = 0;
             var cs = MainV2.comPort?.MAV?.cs;
             if (cs != null)
                 cs.obstacle_magnitude = 0;
@@ -236,8 +241,9 @@ namespace MissionPlanner.Controls
 
         static void StylePointCurve(LineItem curve, Color color)
         {
-            // Markers only — no connecting line between timestamps.
-            curve.Line.IsVisible = false;
+            curve.Line.Width = 2f;
+            curve.Line.IsVisible = true;
+            curve.Line.IsSmooth = false;
             curve.Label.IsVisible = true;
             curve.Symbol.Size = 6f;
             curve.Symbol.Fill = new Fill(color);
@@ -419,14 +425,28 @@ namespace MissionPlanner.Controls
 
             if (!_frameOpen)
             {
-                BeginFrame(bootMs, mag, timeSec);
+                // Same sensor frame arrived after an idle flush — reopen and keep aggregating
+                // so we update the existing closest/farthest points instead of adding extras.
+                if (_hasFlushedFrame && bootMs == _lastFlushedBootMs &&
+                    _closestTrace.Count > 0 && _farthestTrace.Count > 0)
+                {
+                    BeginFrame(
+                        bootMs,
+                        Math.Min(_closestTrace[_closestTrace.Count - 1].Y, mag),
+                        Math.Max(_farthestTrace[_farthestTrace.Count - 1].Y, mag),
+                        _closestTrace[_closestTrace.Count - 1].X,
+                        timeSec);
+                    return false;
+                }
+
+                BeginFrame(bootMs, mag, mag, timeSec, timeSec);
                 return false;
             }
 
             if (bootMs != _frameBootMs)
             {
                 var flushed = FlushFrame();
-                BeginFrame(bootMs, mag, timeSec);
+                BeginFrame(bootMs, mag, mag, timeSec, timeSec);
                 return flushed;
             }
 
@@ -438,14 +458,14 @@ namespace MissionPlanner.Controls
             return false;
         }
 
-        void BeginFrame(uint bootMs, double mag, double timeSec)
+        void BeginFrame(uint bootMs, double closest, double farthest, double frameTimeSec, double lastSampleSec)
         {
             _frameOpen = true;
             _frameBootMs = bootMs;
-            _frameClosest = mag;
-            _frameFarthest = mag;
-            _frameTimeSec = timeSec;
-            _frameLastSampleSec = timeSec;
+            _frameClosest = closest;
+            _frameFarthest = farthest;
+            _frameTimeSec = frameTimeSec;
+            _frameLastSampleSec = lastSampleSec;
         }
 
         bool TryFlushIdleFrame(double nowSec)
@@ -464,11 +484,10 @@ namespace MissionPlanner.Controls
             if (!_frameOpen)
                 return false;
 
-            var addedClosest = AppendPoint(_closestTrace, _frameClosest, _frameTimeSec);
-            var addedFarthest = AppendPoint(_farthestTrace, _frameFarthest, _frameTimeSec);
+            var changed = UpsertFramePoints(_frameClosest, _frameFarthest, _frameTimeSec, _frameBootMs);
             _lastPlotTimeSec = _frameTimeSec;
             ResetFrame();
-            return addedClosest || addedFarthest;
+            return changed;
         }
 
         void ResetFrame()
@@ -481,22 +500,45 @@ namespace MissionPlanner.Controls
             _frameLastSampleSec = 0;
         }
 
-        bool AppendPoint(PointPairList trace, double mag, double timeSec)
+        /// <summary>
+        /// One closest and one farthest per time_boot_ms. Late samples for an already-plotted
+        /// frame update those points instead of creating duplicates.
+        /// </summary>
+        bool UpsertFramePoints(double closest, double farthest, double timeSec, uint bootMs)
         {
-            if (double.IsNaN(mag) || double.IsInfinity(mag))
+            if (double.IsNaN(closest) || double.IsInfinity(closest) ||
+                double.IsNaN(farthest) || double.IsInfinity(farthest))
                 return false;
 
-            if (trace.Count > 0)
+            var updatingSameFrame = _hasFlushedFrame && bootMs == _lastFlushedBootMs &&
+                                    _closestTrace.Count > 0 && _farthestTrace.Count > 0;
+
+            if (updatingSameFrame)
             {
-                var last = trace[trace.Count - 1];
-                if (Math.Abs(last.X - timeSec) < 1e-9 && Math.Abs(last.Y - mag) < 1e-9)
+                var lastClosest = _closestTrace[_closestTrace.Count - 1];
+                var lastFarthest = _farthestTrace[_farthestTrace.Count - 1];
+                var newClosest = Math.Min(lastClosest.Y, closest);
+                var newFarthest = Math.Max(lastFarthest.Y, farthest);
+                if (Math.Abs(lastClosest.Y - newClosest) < 1e-9 &&
+                    Math.Abs(lastFarthest.Y - newFarthest) < 1e-9)
                     return false;
+
+                lastClosest.Y = newClosest;
+                lastFarthest.Y = newFarthest;
+                _closestTrace[_closestTrace.Count - 1] = lastClosest;
+                _farthestTrace[_farthestTrace.Count - 1] = lastFarthest;
+                return true;
             }
 
-            trace.Add(timeSec, mag);
+            _closestTrace.Add(timeSec, closest);
+            _farthestTrace.Add(timeSec, farthest);
+            _hasFlushedFrame = true;
+            _lastFlushedBootMs = bootMs;
 
-            while (trace.Count > MaxPoints)
-                trace.RemoveAt(0);
+            while (_closestTrace.Count > MaxPoints)
+                _closestTrace.RemoveAt(0);
+            while (_farthestTrace.Count > MaxPoints)
+                _farthestTrace.RemoveAt(0);
 
             return true;
         }
